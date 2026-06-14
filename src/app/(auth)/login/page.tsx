@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { signIn, getSession } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { signIn, getSession, useSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
 import { Card, CardHeader, CardBody, Input, Button } from "@nextui-org/react";
 import { Eye, EyeOff, ShieldCheck } from "lucide-react";
 import Link from "next/link";
+import { useEffect } from "react";
 // =========================================================================
 // 1. SKEMA VALIDASI (YUP)
 // Di sini kita mendefinisikan aturan form. Sangat rapi dan terpusat!
@@ -25,8 +26,33 @@ export default function LoginPage() {
   const router = useRouter();
   const [isVisible, setIsVisible] = useState(false);
   const [globalError, setGlobalError] = useState("");
-
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl"); // Mengambil URL tujuan dari address bar
   const toggleVisibility = () => setIsVisible(!isVisible);
+
+  // Ambil data sesi
+  const { data: session, status } = useSession();
+
+  // =========================================================
+  // LOGIKA PEMANTAU SESI (Otomatis pindah halaman jika sudah login)
+  // =========================================================
+  useEffect(() => {
+    if (status === "authenticated" && session?.user?.role) {
+      // 1. Jika ada callbackUrl (misal user dikick middleware), kembalikan ke sana
+      if (callbackUrl && callbackUrl !== "/") {
+        router.push(callbackUrl);
+        return;
+      }
+
+      // 2. Jika login biasa, arahkan sesuai role-nya
+      const role = session.user.role;
+      if (role === "SUPER_ADMIN") router.push("/dashboard/admin/users");
+      else if (role === "RESEPSIONIS")
+        router.push("/dashboard/resepsionis/antrean");
+      else if (role === "DOKTER") router.push("/dashboard/dokter/antrean");
+      else if (role === "APOTEKER") router.push("/dashboard/apoteker/antrean");
+    }
+  }, [status, session, router, callbackUrl]);
 
   // =========================================================================
   // 2. INIT REACT HOOK FORM
@@ -43,13 +69,16 @@ export default function LoginPage() {
   // =========================================================================
   // 3. FUNGSI SUBMIT (Dikelola otomatis oleh handleSubmit)
   // =========================================================================
+  // =========================================================================
+  // 3. FUNGSI SUBMIT (Dikelola otomatis oleh handleSubmit)
+  // =========================================================================
   const onSubmit = async (data: LoginFormData) => {
     setGlobalError(""); // Reset pesan error sebelumnya
 
     try {
-      // Menembak fungsi 'authorize' di NextAuth (src/app/api/auth/[...nextauth]/route.ts)
+      // Menembak fungsi 'authorize' di NextAuth
       const res = await signIn("credentials", {
-        redirect: false, // Matikan redirect otomatis agar kita bisa cek role
+        redirect: false, // Matikan redirect otomatis
         username: data.username,
         password: data.password,
       });
@@ -60,21 +89,9 @@ export default function LoginPage() {
         return;
       }
 
-      // Jika sukses, kita ambil sesi terenkripsi yang baru saja dibuat NextAuth
-      const session = await getSession();
-
-      // Redirect pintar berdasarkan Role
-      if (session?.user?.role === "DOKTER") {
-        router.push("/dashboard/dokter/antrean");
-      } else if (session?.user?.role === "APOTEKER") {
-        router.push("/dashboard/apoteker/antrean");
-      } else if (session?.user?.role === "RESEPSIONIS") {
-        router.push("/dashboard/resepsionis/antrean");
-      } else if (session?.user?.role === "SUPER_ADMIN") {
-        router.push("/dashboard/admin/users");
-      } else {
-        setGlobalError("Role pengguna tidak dikenali.");
-      }
+      // HAPUS rentetan getSession dan pengecekan role di sini.
+      // Begitu signIn sukses, status NextAuth akan berubah,
+      // dan useEffect di atas akan otomatis menarik user ke dashboard!
     } catch (error) {
       console.error("Login Client Error:", error);
       setGlobalError("Terjadi kesalahan jaringan yang tidak terduga.");
