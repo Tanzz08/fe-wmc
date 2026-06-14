@@ -35,21 +35,27 @@ function LoginForm() {
   const { data: session, status } = useSession();
 
   // Logika Pemantau Sesi (Pindah otomatis)
+  // =========================================================
+  // LOGIKA PEMANTAU SESI (Prioritas Hak Akses Mutlak)
+  // =========================================================
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role) {
-      if (callbackUrl && callbackUrl !== "/") {
-        router.push(callbackUrl);
-        return;
-      }
-
       const role = session.user.role;
-      if (role === "SUPER_ADMIN") router.push("/dashboard/admin/users");
-      else if (role === "RESEPSIONIS")
+
+      // Hapus logika pengecekan callbackUrl.
+      // Paksa sistem untuk mengarahkan pengguna HANYA ke ruangan mereka sendiri.
+      if (role === "SUPER_ADMIN") {
+        router.push("/dashboard/admin/users");
+      } else if (role === "RESEPSIONIS") {
         router.push("/dashboard/resepsionis/antrean");
-      else if (role === "DOKTER") router.push("/dashboard/dokter/antrean");
-      else if (role === "APOTEKER") router.push("/dashboard/apoteker/antrean");
+      } else if (role === "DOKTER") {
+        router.push("/dashboard/dokter/antrean");
+      } else if (role === "APOTEKER") {
+        router.push("/dashboard/apoteker/antrean");
+      }
     }
-  }, [status, session, router, callbackUrl]);
+  }, [status, session, router]);
+  // Hapus callbackUrl dari dalam array dependency (kurung siku di atas)
 
   const {
     register,
