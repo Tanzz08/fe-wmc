@@ -85,7 +85,7 @@ export default function AntreanPage() {
     control,
     formState: { errors },
   } = useForm<AntreanFormData>({
-    resolver: yupResolver(antreanSchema),
+    resolver: yupResolver(antreanSchema) as any,
   });
 
   // =========================================================================
