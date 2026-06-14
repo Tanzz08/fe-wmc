@@ -37,7 +37,7 @@ export default function LoginPage() {
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<LoginFormData>({
-    resolver: yupResolver(loginSchema),
+    resolver: yupResolver(loginSchema) as any,
   });
 
   // =========================================================================
