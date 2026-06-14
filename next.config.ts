@@ -1,12 +1,7 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  // Tambahkan 2 baris sakti ini untuk mem-bypass error saat build Vercel
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  /* konfigurasi bawaan kamu sebelumnya */
 };
 
 export default nextConfig;

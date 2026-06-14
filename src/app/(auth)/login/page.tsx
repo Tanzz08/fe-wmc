@@ -1,50 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn, getSession, useSession } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
 import { Card, CardHeader, CardBody, Input, Button } from "@nextui-org/react";
 import { Eye, EyeOff, ShieldCheck } from "lucide-react";
-import Link from "next/link";
-import { useEffect } from "react";
+
 // =========================================================================
 // 1. SKEMA VALIDASI (YUP)
-// Di sini kita mendefinisikan aturan form. Sangat rapi dan terpusat!
 // =========================================================================
 const loginSchema = yup.object().shape({
   username: yup.string().required("Username tidak boleh kosong"),
   password: yup.string().required("Password wajib diisi"),
 });
 
-// Inferensi tipe data otomatis dari skema Yup
 type LoginFormData = yup.InferType<typeof loginSchema>;
 
-export default function LoginPage() {
+// =========================================================================
+// 2. KOMPONEN INTI (LOGIN FORM)
+// Di sinilah semua logika dan useSearchParams berada
+// =========================================================================
+function LoginForm() {
   const router = useRouter();
   const [isVisible, setIsVisible] = useState(false);
   const [globalError, setGlobalError] = useState("");
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl"); // Mengambil URL tujuan dari address bar
+  const callbackUrl = searchParams.get("callbackUrl");
   const toggleVisibility = () => setIsVisible(!isVisible);
 
   // Ambil data sesi
   const { data: session, status } = useSession();
 
-  // =========================================================
-  // LOGIKA PEMANTAU SESI (Otomatis pindah halaman jika sudah login)
-  // =========================================================
+  // Logika Pemantau Sesi (Pindah otomatis)
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role) {
-      // 1. Jika ada callbackUrl (misal user dikick middleware), kembalikan ke sana
       if (callbackUrl && callbackUrl !== "/") {
         router.push(callbackUrl);
         return;
       }
 
-      // 2. Jika login biasa, arahkan sesuai role-nya
       const role = session.user.role;
       if (role === "SUPER_ADMIN") router.push("/dashboard/admin/users");
       else if (role === "RESEPSIONIS")
@@ -54,10 +51,6 @@ export default function LoginPage() {
     }
   }, [status, session, router, callbackUrl]);
 
-  // =========================================================================
-  // 2. INIT REACT HOOK FORM
-  // Tidak perlu lagi useState yang panjang untuk formData!
-  // =========================================================================
   const {
     register,
     handleSubmit,
@@ -66,45 +59,30 @@ export default function LoginPage() {
     resolver: yupResolver(loginSchema),
   });
 
-  // =========================================================================
-  // 3. FUNGSI SUBMIT (Dikelola otomatis oleh handleSubmit)
-  // =========================================================================
-  // =========================================================================
-  // 3. FUNGSI SUBMIT (Dikelola otomatis oleh handleSubmit)
-  // =========================================================================
   const onSubmit = async (data: LoginFormData) => {
-    setGlobalError(""); // Reset pesan error sebelumnya
+    setGlobalError("");
 
     try {
-      // Menembak fungsi 'authorize' di NextAuth
       const res = await signIn("credentials", {
-        redirect: false, // Matikan redirect otomatis
+        redirect: false,
         username: data.username,
         password: data.password,
       });
 
       if (res?.error) {
-        // Error yang dilempar dari backend (via NextAuth) akan masuk ke sini
         setGlobalError(res.error);
         return;
       }
-
-      // HAPUS rentetan getSession dan pengecekan role di sini.
-      // Begitu signIn sukses, status NextAuth akan berubah,
-      // dan useEffect di atas akan otomatis menarik user ke dashboard!
     } catch (error) {
       console.error("Login Client Error:", error);
       setGlobalError("Terjadi kesalahan jaringan yang tidak terduga.");
     }
   };
 
-  // =========================================================================
-  // 4. RENDER UI
-  // =========================================================================
   return (
     <div
       className="relative flex justify-center items-center min-h-screen p-4 bg-cover bg-center bg-no-repeat"
-      style={{ backgroundImage: "url('/img/bg-klinik.jpeg')" }} // <-- Sesuaikan dengan nama gambarmu
+      style={{ backgroundImage: "url('/img/bg-klinik.jpeg')" }}
     >
       <Card className="w-full max-w-md p-4 shadow-xl">
         <CardHeader className="flex flex-col items-center gap-2 pb-0 pt-2 px-4">
@@ -118,7 +96,6 @@ export default function LoginPage() {
         </CardHeader>
 
         <CardBody className="overflow-hidden">
-          {/* Form kini dibungkus handleSubmit dari React Hook Form */}
           <form
             onSubmit={handleSubmit(onSubmit)}
             className="flex flex-col gap-4 mt-4"
@@ -130,11 +107,10 @@ export default function LoginPage() {
             )}
 
             <Input
-              {...register("username")} // Menyambungkan Input dengan React Hook Form
+              {...register("username")}
               label="Username"
               placeholder="Masukkan username Anda"
               variant="bordered"
-              // Integrasi error otomatis dari Yup ke UI NextUI
               isInvalid={!!errors.username}
               errorMessage={errors.username?.message}
             />
@@ -166,7 +142,7 @@ export default function LoginPage() {
               type="submit"
               color="primary"
               className="w-full mt-2 bg-klinik-blue font-semibold text-lg"
-              isLoading={isSubmitting} // Efek loading otomatis dari formState
+              isLoading={isSubmitting}
             >
               {isSubmitting ? "Memverifikasi..." : "Masuk"}
             </Button>
@@ -174,5 +150,23 @@ export default function LoginPage() {
         </CardBody>
       </Card>
     </div>
+  );
+}
+
+// =========================================================================
+// 3. PEMBUNGKUS UTAMA (DEFAULT EXPORT)
+// Tugasnya hanya membungkus LoginForm dengan Suspense agar lolos build Vercel
+// =========================================================================
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          Memuat...
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }
