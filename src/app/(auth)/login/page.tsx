@@ -38,24 +38,29 @@ function LoginForm() {
   // =========================================================
   // LOGIKA PEMANTAU SESI (Prioritas Hak Akses Mutlak)
   // =========================================================
+  // =========================================================
+  // LOGIKA PEMANTAU SESI (Hard Navigation)
+  // =========================================================
   useEffect(() => {
     if (status === "authenticated" && session?.user?.role) {
       const role = session.user.role;
 
-      // Hapus logika pengecekan callbackUrl.
-      // Paksa sistem untuk mengarahkan pengguna HANYA ke ruangan mereka sendiri.
+      // GANTI router.push MENJADI window.location.href
+      // Ini memaksa browser melakukan "Hard Reload" sehingga cache Next.js terhapus
+      // dan halaman dashboard dirender dengan data sesi yang baru 100%
+
       if (role === "SUPER_ADMIN") {
-        router.push("/dashboard/admin/users");
+        window.location.href = "/dashboard/admin/users";
       } else if (role === "RESEPSIONIS") {
-        router.push("/dashboard/resepsionis/antrean");
+        window.location.href = "/dashboard/resepsionis/antrean";
       } else if (role === "DOKTER") {
-        router.push("/dashboard/dokter/antrean");
+        window.location.href = "/dashboard/dokter/antrean";
       } else if (role === "APOTEKER") {
-        router.push("/dashboard/apoteker/antrean");
+        window.location.href = "/dashboard/apoteker/antrean";
       }
     }
-  }, [status, session, router]);
-  // Hapus callbackUrl dari dalam array dependency (kurung siku di atas)
+  }, [status, session]);
+  // Perhatikan: 'router' sudah tidak kita gunakan di sini
 
   const {
     register,
