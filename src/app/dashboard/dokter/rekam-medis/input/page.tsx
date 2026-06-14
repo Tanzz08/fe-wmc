@@ -80,7 +80,7 @@ function RekamMedisForm() {
     watch,
     formState: { errors },
   } = useForm<RekamMedisFormData>({
-    resolver: yupResolver(rekamMedisSchema),
+    resolver: yupResolver(rekamMedisSchema) as any,
   });
 
   // Mutasi untuk menyimpan Rekam Medis
