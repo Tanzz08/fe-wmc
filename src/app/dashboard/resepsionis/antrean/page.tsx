@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-// Tambahkan Controller dan control
 import { useForm, SubmitHandler, Controller } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
@@ -58,7 +57,7 @@ interface Antrean {
   status_antrean: string;
   tgl_registrasi: string;
   pasien: Pasien;
-  safeKey?: string; // Fallback key anti-error
+  safeKey?: string;
 }
 
 const antreanSchema = yup.object().shape({
@@ -66,7 +65,7 @@ const antreanSchema = yup.object().shape({
   status_pasien: yup.string().required("Pilih status pasien"),
   instalasi: yup.string().required("Pilih instalasi"),
   unit_pelayanan: yup.string().required("Pilih unit pelayanan (Poli)"),
-  sub_unit: yup.string(), // <--- TAMBAHKAN INI (Boleh kosong)
+  sub_unit: yup.string(),
   cara_bayar: yup.string().required("Pilih cara bayar"),
 });
 
@@ -77,14 +76,13 @@ export default function AntreanPage() {
   const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Setup React Hook Form
   const {
     register,
     handleSubmit,
     setValue,
     watch,
     reset,
-    control, // <--- TAMBAHKAN INI
+    control,
     formState: { errors },
   } = useForm<AntreanFormData>({
     resolver: yupResolver(antreanSchema),
@@ -93,8 +91,6 @@ export default function AntreanPage() {
   // =========================================================================
   // 2. REACT QUERY (FETCH DATA)
   // =========================================================================
-
-  // Tarik Data Antrean (Auto-Refresh setiap 5 detik untuk monitor live)
   const { data: listAntrean = [] } = useQuery<Antrean[]>({
     queryKey: ["antreanList"],
     queryFn: async () => {
@@ -102,7 +98,6 @@ export default function AntreanPage() {
         const res = await api.get("/antrean");
         const fetchedData = res.data?.data || res.data;
         const safeData = Array.isArray(fetchedData) ? fetchedData : [];
-        // Jahit safeKey untuk tabel
         return safeData.map((item, index) => ({
           ...item,
           safeKey: item.nopen || `fallback-antrean-${index}`,
@@ -112,10 +107,9 @@ export default function AntreanPage() {
         return [];
       }
     },
-    refetchInterval: 5000, // Refresh otomatis
+    refetchInterval: 5000,
   });
 
-  // Tarik Data Pasien untuk dropdown Autocomplete
   const { data: listPasien = [] } = useQuery<Pasien[]>({
     queryKey: ["pasienListDropdown"],
     queryFn: async () => {
@@ -130,18 +124,34 @@ export default function AntreanPage() {
   });
 
   // =========================================================================
-  // 3. KALKULASI STATISTIK
+  // 3. FILTER DATA HARI INI & KALKULASI STATISTIK
   // =========================================================================
-  const totalAntrean = listAntrean.length;
-  const tungguPoli = listAntrean.filter(
+
+  // Ambil tanggal hari ini dalam format lokal (mengabaikan jam)
+  const todayStr = new Date().toDateString();
+
+  // Menyaring antrean agar hanya menampilkan pendaftaran hari ini saja
+  const antreanHariIni = listAntrean.filter((a) => {
+    return new Date(a.tgl_registrasi).toDateString() === todayStr;
+  });
+
+  // Statistik sekarang merujuk ke antreanHariIni, bukan listAntrean keseluruhan
+  const totalAntrean = antreanHariIni.length;
+  const tungguPoli = antreanHariIni.filter(
     (a) => a.status_antrean === "TUNGGU_POLI",
   ).length;
-  const sedangDiperiksa = listAntrean.filter(
-    (a) => a.status_antrean === "PEMERIKSAAN",
-  ).length;
-  const selesaiPoli = listAntrean.filter(
+  const sedangDiperiksa = antreanHariIni.filter(
     (a) =>
-      a.status_antrean === "SELESAI_POLI" || a.status_antrean === "OBAT_SIAP",
+      a.status_antrean === "PEMERIKSAAN" || a.status_antrean === "PROSES_POLI",
+  ).length;
+  const selesaiPoli = antreanHariIni.filter(
+    (a) =>
+      a.status_antrean === "SELESAI_POLI" ||
+      a.status_antrean === "TUNGGU_FARMASI" ||
+      a.status_antrean === "FARMASI" ||
+      a.status_antrean === "OBAT_SIAP" ||
+      a.status_antrean === "SELESAI_FARMASI" ||
+      a.status_antrean === "SELESAI",
   ).length;
 
   // =========================================================================
@@ -154,7 +164,7 @@ export default function AntreanPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["antreanList"] });
       onClose();
-      reset(); // Kosongkan form
+      reset();
     },
     onError: (error: any) => {
       setErrorMsg(
@@ -163,14 +173,13 @@ export default function AntreanPage() {
     },
   });
 
-  // Submit Handler dengan Type Guard yang aman
   const onSubmitForm: SubmitHandler<AntreanFormData> = (data) => {
     setErrorMsg("");
     mutation.mutate(data);
   };
 
   const handleOpenModal = () => {
-    reset({}); // Bersihkan sisa form sebelumnya
+    reset({});
     setErrorMsg("");
     onOpen();
   };
@@ -192,6 +201,7 @@ export default function AntreanPage() {
           </Chip>
         );
       case "PEMERIKSAAN":
+      case "PROSES_POLI":
         return (
           <Chip
             color="primary"
@@ -203,7 +213,11 @@ export default function AntreanPage() {
           </Chip>
         );
       case "SELESAI_POLI":
+      case "TUNGGU_FARMASI":
+      case "FARMASI":
       case "OBAT_SIAP":
+      case "SELESAI_FARMASI":
+      case "SELESAI":
         return (
           <Chip
             color="success"
@@ -232,7 +246,7 @@ export default function AntreanPage() {
             Menara Pengawas Kunjungan
           </h1>
           <p className="text-sm text-slate-500">
-            Pantau seluruh pergerakan pasien di semua unit pelayanan.
+            Pantau seluruh pergerakan pasien hari ini di semua unit pelayanan.
           </p>
         </div>
         <Button
@@ -308,7 +322,7 @@ export default function AntreanPage() {
       </div>
 
       {/* TABEL ANTREAN */}
-      <Table aria-label="Tabel Semua Antrean" className="shadow-sm">
+      <Table aria-label="Tabel Antrean Hari Ini" className="shadow-sm">
         <TableHeader>
           <TableColumn>NOPEN</TableColumn>
           <TableColumn>NAMA PASIEN</TableColumn>
@@ -316,7 +330,11 @@ export default function AntreanPage() {
           <TableColumn>WAKTU DAFTAR</TableColumn>
           <TableColumn>STATUS</TableColumn>
         </TableHeader>
-        <TableBody emptyContent={"Belum ada kunjungan."} items={listAntrean}>
+        {/* Pastikan items mengarah ke antreanHariIni */}
+        <TableBody
+          emptyContent={"Belum ada kunjungan hari ini."}
+          items={antreanHariIni}
+        >
           {(antrean) => (
             <TableRow key={antrean.safeKey}>
               <TableCell className="font-mono text-xs text-slate-500">
@@ -374,8 +392,6 @@ export default function AntreanPage() {
                   </div>
                 )}
 
-                {/* Integrasi Autocomplete NextUI dengan React Hook Form */}
-                {/* JURUS BEST PRACTICE: Menggunakan Controller untuk Autocomplete */}
                 <Controller
                   name="id_rm"
                   control={control}
@@ -385,9 +401,8 @@ export default function AntreanPage() {
                       label="Cari Pasien (Nama atau ID RM)"
                       variant="bordered"
                       defaultItems={listPasien}
-                      selectedKey={field.value || ""} // Ikat dengan state React Hook Form
+                      selectedKey={field.value || ""}
                       onSelectionChange={(key) => {
-                        // Pastikan key yang ditangkap selalu String murni
                         field.onChange(key ? String(key) : "");
                       }}
                       isInvalid={!!errors.id_rm}
@@ -413,7 +428,6 @@ export default function AntreanPage() {
                 />
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Integrasi Select NextUI dengan React Hook Form */}
                   <Select
                     {...register("status_pasien")}
                     isRequired

@@ -66,8 +66,14 @@ export default function LoginPage() {
       // Redirect pintar berdasarkan Role
       if (session?.user?.role === "DOKTER") {
         router.push("/dashboard/dokter/antrean");
-      } else {
+      } else if (session?.user?.role === "APOTEKER") {
+        router.push("/dashboard/apoteker/antrean");
+      } else if (session?.user?.role === "RESEPSIONIS") {
         router.push("/dashboard/resepsionis/antrean");
+      } else if (session?.user?.role === "SUPER_ADMIN") {
+        router.push("/dashboard/admin/users");
+      } else {
+        setGlobalError("Role pengguna tidak dikenali.");
       }
     } catch (error) {
       console.error("Login Client Error:", error);
@@ -79,7 +85,10 @@ export default function LoginPage() {
   // 4. RENDER UI
   // =========================================================================
   return (
-    <div className="flex justify-center items-center min-h-screen bg-slate-100 p-4">
+    <div
+      className="relative flex justify-center items-center min-h-screen p-4 bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: "url('/img/bg-klinik.jpeg')" }} // <-- Sesuaikan dengan nama gambarmu
+    >
       <Card className="w-full max-w-md p-4 shadow-xl">
         <CardHeader className="flex flex-col items-center gap-2 pb-0 pt-2 px-4">
           <div className="p-3 bg-blue-100 text-klinik-blue rounded-full">
@@ -144,17 +153,6 @@ export default function LoginPage() {
             >
               {isSubmitting ? "Memverifikasi..." : "Masuk"}
             </Button>
-
-            {/* Tambahkan kode ini di bawah tombol Submit Login */}
-            <div className="text-center text-sm text-slate-500 mt-4">
-              Belum punya akun pegawai?{" "}
-              <Link
-                href="/register"
-                className="text-klinik-blue font-bold hover:underline"
-              >
-                Daftar di sini
-              </Link>
-            </div>
           </form>
         </CardBody>
       </Card>

@@ -12,7 +12,11 @@ import {
   ClipboardList,
   ShieldCheck,
   FileText,
-  Pill, // <-- 1. TAMBAHKAN ICON INI
+  Pill,
+  PackageSearch, // <-- 1. TAMBAHKAN ICON INI
+  LayoutDashboard,
+  UserCog,
+  Archive,
 } from "lucide-react";
 
 // KITA GUNAKAN NEXT-AUTH, BUKAN LAGI COOKIES/JWT-DECODE MANUAL
@@ -47,7 +51,7 @@ export default function DashboardLayout({
   // ==========================================================
   const isDokter = session?.user?.role === "DOKTER";
   const isApoteker = session?.user?.role === "APOTEKER"; // <--- CEK ROLE APOTEKER
-
+  const isAdmin = session?.user?.role === "SUPER_ADMIN"; // <--- CEK ROLE ADMIN
   const menuResepsionis = [
     {
       name: "Pendaftaran Antrean",
@@ -83,9 +87,37 @@ export default function DashboardLayout({
   // MENU KHUSUS APOTEKER
   const menuApoteker = [
     {
-      name: "Antrean Farmasi",
+      name: "Antrean Resep",
       path: "/dashboard/apoteker/antrean",
       icon: <Pill size={20} />,
+    },
+    {
+      name: "Master Obat",
+      path: "/dashboard/apoteker/obat", // <--- TAMBAHKAN INI
+      icon: <PackageSearch size={20} />,
+    },
+  ];
+
+  const menuAdmin = [
+    {
+      name: "Manajemen Pegawai",
+      path: "/dashboard/admin/users",
+      icon: <UserCog size={20} />,
+    },
+    {
+      name: "Master Pasien",
+      path: "/dashboard/admin/pasien",
+      icon: <Users size={20} />,
+    },
+    {
+      name: "Master Obat",
+      path: "/dashboard/admin/obat",
+      icon: <PackageSearch size={20} />,
+    },
+    {
+      name: "Arsip & Laporan",
+      path: "/dashboard/admin/laporan",
+      icon: <Archive size={20} />,
     },
   ];
 
@@ -93,6 +125,7 @@ export default function DashboardLayout({
   let activeMenu = menuResepsionis; // Default
   if (isDokter) activeMenu = menuDokter;
   if (isApoteker) activeMenu = menuApoteker; // <--- PASANG MENU APOTEKER
+  if (isAdmin) activeMenu = menuAdmin;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
@@ -104,7 +137,14 @@ export default function DashboardLayout({
 
         <nav className="flex-1 flex flex-col gap-2">
           <p className="text-xs text-slate-300 mb-2 font-semibold uppercase tracking-wider">
-            Menu {isDokter ? "Dokter" : isApoteker ? "Apoteker" : "Resepsionis"}
+            Menu{" "}
+            {isDokter
+              ? "Dokter"
+              : isApoteker
+                ? "Apoteker"
+                : isAdmin
+                  ? "Admin"
+                  : "Resepsionis"}
           </p>
 
           {/* Render Menu Otomatis */}

@@ -24,16 +24,23 @@ import api from "@/lib/axios";
 interface Antrean {
   nopen: string;
   id_rm: string;
-  pasien: { nama: string; jenis_kelamin: string };
+  pasien: { nama: string; jenis_kelamin: string; tanggal_lahir: string };
   status_pasien: string;
   cara_bayar: string;
   instalasi: string;
   unit_pelayanan: string;
   sub_unit?: string | null;
+  status_antrean: string;
+  // Kolom Waktu
   tgl_registrasi: string;
   tgl_terima_poli?: string | null;
+  tgl_input_asesmen?: string | null;
+  tgl_input_tindakan?: string | null;
   tgl_final_poli?: string | null;
-  dokter?: { username: string };
+  tgl_order_resep?: string | null;
+  tgl_masuk_farmasi?: string | null;
+  tgl_selesai_farmasi?: string | null;
+  user_daftar?: { username: string };
 }
 
 export default function LaporanAntreanPage() {
@@ -53,11 +60,14 @@ export default function LaporanAntreanPage() {
       const fetchedData = res.data?.data || res.data;
       return Array.isArray(fetchedData) ? fetchedData : [];
     },
+    // TAMBAHKAN 2 BARIS INI:
+    refetchInterval: 3000, // Refresh data otomatis setiap 3 detik
+    refetchOnWindowFocus: true, // Refresh saat ganti tab browser
   });
 
   // Filter Logic Bertingkat (Dengan Rentang Tanggal)
   const filteredData = listAntrean.filter((item) => {
-    // 1. Filter Tanggal (Bisa salah satu kosong, atau keduanya diisi)
+    // 1. Filter Tanggal
     const itemDate = new Date(item.tgl_registrasi).toISOString().split("T")[0];
     let matchDate = true;
     if (startDate && !endDate) matchDate = itemDate >= startDate;
@@ -77,13 +87,22 @@ export default function LaporanAntreanPage() {
     return matchDate && matchInstalasi && matchUnit && matchSubUnit;
   });
 
-  // Helper: Format Waktu (Jam:Menit:Detik)
-  const formatTime = (dateString?: string | null) => {
+  // Helper: Format Waktu (Jam:Menit:Detik) - Untuk Web
+  const formatTimeFull = (dateString?: string | null) => {
     if (!dateString) return "-";
     return new Date(dateString).toLocaleTimeString("id-ID", {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
+    });
+  };
+
+  // Helper: Format Jam Saja (Jam:Menit) - Untuk Cetak biar lebih ringkas
+  const formatTimeShort = (dateString?: string | null) => {
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -97,12 +116,28 @@ export default function LaporanAntreanPage() {
     });
   };
 
-  // Helper: Hitung Durasi SLA dalam Menit
-  const calculateSLA = (start?: string | null, end?: string | null) => {
+  // Helper: Hitung Umur
+  const calculateAge = (dobString?: string) => {
+    if (!dobString) return "-";
+    const diffMs = Date.now() - new Date(dobString).getTime();
+    const ageDt = new Date(diffMs);
+    return Math.abs(ageDt.getUTCFullYear() - 1970) + " Thn";
+  };
+
+  // Helper: Hitung Durasi SLA dalam Menit (Teks)
+  const calculateSLAText = (start?: string | null, end?: string | null) => {
     if (!start || !end) return "-";
     const diffMs = new Date(end).getTime() - new Date(start).getTime();
     const diffMins = Math.floor(diffMs / 60000);
-    return `${diffMins} Menit`;
+    return diffMins >= 0 ? `${diffMins} Menit` : "0 Menit";
+  };
+
+  // Helper: Hitung Durasi SLA dalam Menit (Angka saja untuk Cetak)
+  const calculateSLAMins = (start?: string | null, end?: string | null) => {
+    if (!start || !end) return "-";
+    const diffMs = new Date(end).getTime() - new Date(start).getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    return diffMins >= 0 ? diffMins : 0;
   };
 
   const handlePrint = () => {
@@ -217,7 +252,7 @@ export default function LaporanAntreanPage() {
         </Card>
       </div>
 
-      {/* 2. TABEL VERSI UI WEB (NEXTUI) */}
+      {/* 2. TABEL VERSI UI WEB (NEXTUI) - TETAP RINGKAS */}
       <div className="print:hidden">
         <Table
           aria-label="Tabel Laporan"
@@ -264,18 +299,18 @@ export default function LaporanAntreanPage() {
                   )}
                 </TableCell>
                 <TableCell className="font-mono text-sm">
-                  {formatTime(item.tgl_registrasi)} ➔{" "}
-                  {formatTime(item.tgl_terima_poli)}
+                  {formatTimeFull(item.tgl_registrasi)} ➔{" "}
+                  {formatTimeFull(item.tgl_terima_poli)}
                 </TableCell>
 
                 {/* WAKTU TUNGGU: Daftar -> Terima Poli */}
                 <TableCell className="bg-amber-50 font-bold text-amber-700">
-                  {calculateSLA(item.tgl_registrasi, item.tgl_terima_poli)}
+                  {calculateSLAText(item.tgl_registrasi, item.tgl_terima_poli)}
                 </TableCell>
 
                 {/* LAMA LAYANAN: Terima Poli -> Selesai Poli */}
                 <TableCell className="bg-emerald-50 font-bold text-emerald-700">
-                  {calculateSLA(item.tgl_terima_poli, item.tgl_final_poli)}
+                  {calculateSLAText(item.tgl_terima_poli, item.tgl_final_poli)}
                 </TableCell>
               </TableRow>
             )}
@@ -283,26 +318,28 @@ export default function LaporanAntreanPage() {
         </Table>
       </div>
 
-      {/* 3. TABEL VERSI CETAK PDF (RAW HTML - LEDGER STYLE) */}
+      {/* 3. TABEL VERSI CETAK PDF (RAW HTML - LEDGER STYLE KEMENKES LENGKAP) */}
       <div className="hidden print:block print:w-full print:bg-white print:absolute print:top-0 print:left-0 print:z-[99999]">
         <style type="text/css">
           {`
             @media print {
-              @page { size: landscape; margin: 10mm; }
-              body { background-color: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+              @page { size: landscape; margin: 5mm; }
+              body { background-color: white !important; font-family: Arial, sans-serif; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
               aside, nav, header { display: none !important; }
-              .ledger-table th, .ledger-table td { border: 1px solid #000; padding: 4px; font-size: 9px; text-align: center; }
-              .ledger-table th { background-color: #f1f5f9 !important; font-weight: bold; }
+              table { width: 100%; border-collapse: collapse; }
+              th, td { border: 1px solid #000; padding: 2px 4px; font-size: 7.5px; text-align: center; word-wrap: break-word; }
+              th { background-color: #f1f5f9 !important; font-weight: bold; }
+              .text-left { text-align: left; }
             }
           `}
         </style>
 
         <div className="text-center mb-4">
-          <h2 className="text-lg font-bold uppercase">
-            Laporan Register Antrean Pasien
+          <h2 className="text-sm font-bold uppercase mb-1">
+            Laporan Register Antrean Pasien & Indikator Mutu Nasional (INM)
           </h2>
-          <p className="text-sm">WIHDATUL UMMAH MEDICAL CENTER</p>
-          <p className="text-xs mt-1 pb-2">
+          <p className="text-xs">WIHDATUL UMMAH MEDICAL CENTER</p>
+          <p className="text-[10px] mt-1 pb-2">
             Periode: {startDate ? formatDateOnly(startDate) : "Awal"} s.d{" "}
             {endDate ? formatDateOnly(endDate) : "Akhir"}
             {" | "} Instalasi: {filterInstalasi} | Unit: {filterUnit}
@@ -310,37 +347,50 @@ export default function LaporanAntreanPage() {
           </p>
         </div>
 
-        <table className="ledger-table w-full border-collapse">
+        <table>
           <thead>
             <tr>
-              <th rowSpan={2} className="w-8">
-                NO
+              <th rowSpan={2} className="w-6">
+                No.
               </th>
-              <th rowSpan={2}>TANGGAL</th>
-              <th rowSpan={2}>NO PENDAFTARAN</th>
-              <th rowSpan={2}>NO RM</th>
-              <th rowSpan={2}>NAMA PASIEN</th>
-              <th rowSpan={2}>L/P</th>
-              <th rowSpan={2}>CARA BAYAR</th>
-              <th colSpan={3}>LOKASI PELAYANAN</th>
-              <th colSpan={3}>PENCATATAN WAKTU</th>
-              <th colSpan={2}>MUTU WAKTU (SLA)</th>
+              <th rowSpan={2}>No. RM</th>
+              <th rowSpan={2}>NOPEN</th>
+              <th rowSpan={2}>Nama Pasien</th>
+              <th rowSpan={2}>JK</th>
+              <th rowSpan={2}>Tgl Lahir/Umur</th>
+              <th rowSpan={2}>Status</th>
+              <th rowSpan={2}>Instalasi</th>
+              <th rowSpan={2}>Unit Pelayanan</th>
+              <th rowSpan={2}>Cara Bayar</th>
+              <th colSpan={8}>Pencatatan Waktu (Jam:Menit)</th>
+              <th colSpan={7}>Waktu Tunggu / Pelayanan (Menit)</th>
+              <th rowSpan={2}>User Daftar</th>
             </tr>
             <tr>
-              <th>INSTALASI</th>
-              <th>UNIT</th>
-              <th>SUB UNIT</th>
-              <th>DAFTAR</th>
-              <th>DIPANGGIL</th>
-              <th>SELESAI</th>
-              <th>WAKTU TUNGGU</th>
-              <th>WAKTU LAYANAN</th>
+              {/* Kolom Pencatatan Waktu */}
+              <th>Tgl Registrasi</th>
+              <th>Tgl Terima Poli</th>
+              <th>Input Tindakan</th>
+              <th>Input Asesmen</th>
+              <th>Final Poli</th>
+              <th>Kirim Order Resep</th>
+              <th>Masuk Farmasi</th>
+              <th>Selesai Farmasi</th>
+
+              {/* Kolom Waktu Tunggu */}
+              <th>Tunggu Poli</th>
+              <th>Tindakan</th>
+              <th>Asesmen</th>
+              <th>Tunggu Pelayanan</th>
+              <th>Tunggu Resep</th>
+              <th>Obat Siap</th>
+              <th>WPRJ</th>
             </tr>
           </thead>
           <tbody>
             {filteredData.length === 0 ? (
               <tr>
-                <td colSpan={15} className="py-4">
+                <td colSpan={26} className="py-4">
                   Tidak ada data pasien pada filter ini.
                 </td>
               </tr>
@@ -348,28 +398,77 @@ export default function LaporanAntreanPage() {
               filteredData.map((item, index) => (
                 <tr key={item.nopen}>
                   <td>{index + 1}</td>
-                  <td>{formatDateOnly(item.tgl_registrasi)}</td>
-                  <td className="font-mono">{item.nopen}</td>
                   <td>{item.id_rm}</td>
-                  <td className="text-left px-2 uppercase">
+                  <td>{item.nopen}</td>
+                  <td className="text-left font-semibold uppercase">
                     {item.pasien?.nama}
                   </td>
                   <td>
                     {item.pasien?.jenis_kelamin === "Laki-laki" ? "L" : "P"}
                   </td>
-                  <td>{item.cara_bayar}</td>
+                  <td>
+                    {item.pasien?.tanggal_lahir
+                      ? formatDateOnly(item.pasien.tanggal_lahir)
+                      : "-"}{" "}
+                    / {calculateAge(item.pasien?.tanggal_lahir)}
+                  </td>
+                  <td>{item.status_pasien}</td>
                   <td>{item.instalasi}</td>
                   <td>{item.unit_pelayanan}</td>
-                  <td>{item.sub_unit || "-"}</td>
-                  <td>{formatTime(item.tgl_registrasi)}</td>
-                  <td>{formatTime(item.tgl_terima_poli)}</td>
-                  <td>{formatTime(item.tgl_final_poli)}</td>
-                  <td className="font-bold">
-                    {calculateSLA(item.tgl_registrasi, item.tgl_terima_poli)}
+                  <td>{item.cara_bayar}</td>
+
+                  {/* Pencatatan Waktu */}
+                  <td>{formatTimeShort(item.tgl_registrasi)}</td>
+                  <td>{formatTimeShort(item.tgl_terima_poli)}</td>
+                  <td>{formatTimeShort(item.tgl_input_tindakan)}</td>
+                  <td>{formatTimeShort(item.tgl_input_asesmen)}</td>
+                  <td>{formatTimeShort(item.tgl_final_poli)}</td>
+                  <td>{formatTimeShort(item.tgl_order_resep)}</td>
+                  <td>{formatTimeShort(item.tgl_masuk_farmasi)}</td>
+                  <td>{formatTimeShort(item.tgl_selesai_farmasi)}</td>
+
+                  {/* Waktu Tunggu / Pelayanan */}
+                  <td>
+                    {calculateSLAMins(
+                      item.tgl_registrasi,
+                      item.tgl_terima_poli,
+                    )}
                   </td>
-                  <td className="font-bold">
-                    {calculateSLA(item.tgl_terima_poli, item.tgl_final_poli)}
+                  <td>
+                    {calculateSLAMins(
+                      item.tgl_terima_poli,
+                      item.tgl_input_tindakan,
+                    )}
                   </td>
+                  <td>
+                    {calculateSLAMins(
+                      item.tgl_terima_poli,
+                      item.tgl_input_asesmen,
+                    )}
+                  </td>
+                  <td>
+                    {calculateSLAMins(item.tgl_registrasi, item.tgl_final_poli)}
+                  </td>
+                  <td>
+                    {calculateSLAMins(
+                      item.tgl_order_resep,
+                      item.tgl_masuk_farmasi,
+                    )}
+                  </td>
+                  <td>
+                    {calculateSLAMins(
+                      item.tgl_masuk_farmasi,
+                      item.tgl_selesai_farmasi,
+                    )}
+                  </td>
+                  <td className="font-bold bg-slate-100">
+                    {calculateSLAMins(
+                      item.tgl_registrasi,
+                      item.tgl_selesai_farmasi || item.tgl_final_poli,
+                    )}
+                  </td>
+
+                  <td>{item.user_daftar?.username}</td>
                 </tr>
               ))
             )}
