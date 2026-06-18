@@ -81,7 +81,7 @@ export default function PasienPage() {
     reset,
     formState: { errors, isSubmitting },
   } = useForm<PasienFormData>({
-    resolver: yupResolver(pasienSchema),
+    resolver: yupResolver(pasienSchema) as any, // "as any" untuk mencegah error build Vercel
   });
 
   // =========================================================================
@@ -182,7 +182,6 @@ export default function PasienPage() {
     },
   });
 
-  // MENJADI SEPERTI INI:
   const onSubmitForm: SubmitHandler<PasienFormData> = (data) => {
     if (modalMode === "view") return onClose();
     setErrorMsg("");
@@ -212,7 +211,7 @@ export default function PasienPage() {
   };
 
   // =========================================================================
-  // 5. RENDER UI (Persis seperti V1)
+  // 5. RENDER UI
   // =========================================================================
   return (
     <div className="flex flex-col gap-6">
@@ -252,91 +251,110 @@ export default function PasienPage() {
       </Card>
 
       {/* TABEL */}
-      <Table aria-label="Tabel Master Data Pasien" className="shadow-sm">
-        <TableHeader>
-          <TableColumn>ID RM</TableColumn>
-          <TableColumn>NAMA PASIEN</TableColumn>
-          <TableColumn>NIK (DECRYPTED)</TableColumn>
-          <TableColumn>JK</TableColumn>
-          <TableColumn>TANGGAL LAHIR</TableColumn>
-          <TableColumn>AKSI</TableColumn>
-        </TableHeader>
-        <TableBody
-          items={filteredPasien}
-          isLoading={isLoading}
-          loadingContent={
-            <div className="font-semibold text-klinik-blue">Memuat Data...</div>
-          }
-          emptyContent={isLoading ? " " : "Tidak ada data."}
+      <div className="overflow-x-auto w-full">
+        <Table
+          aria-label="Tabel Master Data Pasien"
+          className="shadow-sm min-w-max"
         >
-          {/* Key dijamin aman karena mengambil langsung dari id_rm backend */}
-          {(pasien) => (
-            <TableRow key={pasien.id_rm}>
-              <TableCell>
-                <Chip
-                  size="sm"
-                  color="primary"
-                  variant="flat"
-                  className="font-semibold"
-                >
-                  {pasien.id_rm}
-                </Chip>
-              </TableCell>
-              <TableCell className="font-medium text-slate-700">
-                {pasien.nama}
-              </TableCell>
-              <TableCell className="font-mono text-xs">{pasien.nik}</TableCell>
-              <TableCell>{pasien.jenis_kelamin}</TableCell>
-              <TableCell>
-                {new Date(pasien.tanggal_lahir).toLocaleDateString("id-ID", {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })}
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-2">
-                  <Button
-                    isIconOnly
+          <TableHeader>
+            <TableColumn>ID RM</TableColumn>
+            <TableColumn>NAMA PASIEN</TableColumn>
+            <TableColumn>NIK (DECRYPTED)</TableColumn>
+            <TableColumn>JENIS KELAMIN</TableColumn>
+            <TableColumn>TANGGAL LAHIR</TableColumn>
+            <TableColumn>NO. TELEPON</TableColumn>
+            <TableColumn>ALAMAT</TableColumn>
+            <TableColumn align="center">AKSI</TableColumn>
+          </TableHeader>
+          <TableBody
+            items={filteredPasien}
+            isLoading={isLoading}
+            loadingContent={
+              <div className="font-semibold text-klinik-blue">
+                Memuat Data...
+              </div>
+            }
+            emptyContent={isLoading ? " " : "Tidak ada data."}
+          >
+            {(pasien) => (
+              <TableRow key={pasien.id_rm}>
+                <TableCell>
+                  <Chip
                     size="sm"
-                    variant="light"
                     color="primary"
-                    onPress={() =>
-                      router.push(
-                        `/dashboard/resepsionis/pasien/${pasien.id_rm}`,
-                      )
-                    }
+                    variant="flat"
+                    className="font-semibold"
                   >
-                    <Eye size={18} />
-                  </Button>
-                  <Button
-                    isIconOnly
-                    size="sm"
-                    variant="light"
-                    color="warning"
-                    onPress={() => handleOpenAction(pasien.id_rm, "edit")}
-                  >
-                    <Edit size={18} />
-                  </Button>
-                  <Button
-                    isIconOnly
-                    size="sm"
-                    variant="light"
-                    color="danger"
-                    isLoading={
-                      deleteMutation.isPending &&
-                      deleteMutation.variables === pasien.id_rm
-                    }
-                    onPress={() => handleDelete(pasien.id_rm, pasien.nama)}
-                  >
-                    <Trash2 size={18} />
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+                    {pasien.id_rm}
+                  </Chip>
+                </TableCell>
+                <TableCell className="font-medium text-slate-700 whitespace-nowrap">
+                  {pasien.nama}
+                </TableCell>
+                <TableCell className="font-mono text-xs">
+                  {pasien.nik}
+                </TableCell>
+                <TableCell>{pasien.jenis_kelamin}</TableCell>
+                <TableCell className="whitespace-nowrap">
+                  {new Date(pasien.tanggal_lahir).toLocaleDateString("id-ID", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </TableCell>
+                <TableCell className="font-mono text-sm">
+                  {pasien.no_telepon}
+                </TableCell>
+                <TableCell>
+                  {/* Menambahkan pembatas teks agar alamat yang panjang tidak merusak tabel */}
+                  <div className="max-w-[200px] truncate" title={pasien.alamat}>
+                    {pasien.alamat}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      isIconOnly
+                      size="sm"
+                      variant="light"
+                      color="primary"
+                      onPress={() =>
+                        router.push(
+                          `/dashboard/resepsionis/pasien/${pasien.id_rm}`,
+                        )
+                      }
+                    >
+                      <Eye size={18} />
+                    </Button>
+                    <Button
+                      isIconOnly
+                      size="sm"
+                      variant="light"
+                      color="warning"
+                      onPress={() => handleOpenAction(pasien.id_rm, "edit")}
+                    >
+                      <Edit size={18} />
+                    </Button>
+                    <Button
+                      isIconOnly
+                      size="sm"
+                      variant="light"
+                      color="danger"
+                      isLoading={
+                        deleteMutation.isPending &&
+                        deleteMutation.variables === pasien.id_rm
+                      }
+                      onPress={() => handleDelete(pasien.id_rm, pasien.nama)}
+                    >
+                      <Trash2 size={18} />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
       {/* MODAL FORM */}
       <Modal
