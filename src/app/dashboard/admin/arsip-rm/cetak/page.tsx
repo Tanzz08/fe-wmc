@@ -125,8 +125,12 @@ function CetakDokumen() {
           {/* KOP SURAT */}
           <div className="flex border border-black mb-1">
             <div className="w-20 flex items-center justify-center border-r border-black p-2">
-              <div className="w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center text-[8px] overflow-hidden font-bold">
-                WMC
+              <div className="w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center text-[8px] overflow-hidden">
+                <img
+                  src="/img/image.png"
+                  alt="Logo"
+                  className="w-full h-full object-contain"
+                />
               </div>
             </div>
             <div className="flex-1 text-center flex flex-col justify-center py-2">
