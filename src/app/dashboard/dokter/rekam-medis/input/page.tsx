@@ -77,7 +77,7 @@ function RekamMedisForm() {
     handleSubmit,
     setValue,
     watch,
-    getValues, // <--- TAMBAHKAN INI UNTUK MENARIK TEKS SECARA REAL-TIME
+    getValues, // <--- UNTUK MENARIK TEKS SECARA REAL-TIME
     formState: { errors },
   } = useForm<RekamMedisFormData>({
     resolver: yupResolver(rekamMedisSchema) as any,
@@ -525,7 +525,7 @@ function RekamMedisForm() {
                       </div>
                     </div>
 
-                    {/* Tindakan & Terapi dengan Quick-Add Multi Select */}
+                    {/* Tindakan & Terapi dengan Quick-Add */}
                     <div className="flex flex-col gap-4">
                       <h3 className="font-semibold text-slate-700 border-b pb-2">
                         Terapi & Tindakan
@@ -538,23 +538,19 @@ function RekamMedisForm() {
                         variant="bordered"
                         color="success"
                         className="mb-1"
-                        selectedKeys={[]} // KUNCI UTAMA: Selalu dikosongkan agar dokter bisa klik obat yang sama/berbeda terus-menerus
+                        selectedKeys={[]} // Selalu kosong agar bisa diklik berulang kali
                         onSelectionChange={(keys) => {
                           const obatTerpilih = Array.from(keys)[0] as string;
                           if (obatTerpilih) {
-                            // 1. Ambil teks apa pun yang saat ini sedang ada di dalam Textarea
                             const teksSekarang =
                               getValues("terapi_pengobatan") || "";
-
-                            // 2. Jika textarea sudah ada isinya, beri Enter (\n) lalu tambahkan obat baru.
-                            // Jika masih kosong, langsung tulis obatnya.
                             const teksBaru = teksSekarang
                               ? `${teksSekarang}\n- ${obatTerpilih} `
                               : `- ${obatTerpilih} `;
 
-                            // 3. Tembakkan teks gabungan tersebut kembali ke dalam Textarea
                             setValue("terapi_pengobatan", teksBaru, {
                               shouldValidate: true,
+                              shouldDirty: true,
                             });
                           }
                         }}
@@ -583,7 +579,12 @@ function RekamMedisForm() {
                         placeholder="Contoh: Ringer Laktat, Paracetamol..."
                         minRows={4}
                         variant="bordered"
+                        value={watch("terapi_pengobatan") || ""}
+                        onValueChange={(val) =>
+                          setValue("terapi_pengobatan", val)
+                        }
                       />
+
                       <Textarea
                         {...register("tindakan_prosedur")}
                         label="Tindakan / Prosedur"
