@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm, SubmitHandler } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
@@ -17,7 +17,6 @@ import {
   Select,
   SelectItem,
   Spinner,
-  Divider,
 } from "@nextui-org/react";
 import { Save, Activity, Stethoscope, Pill, ArrowLeft } from "lucide-react";
 import api from "@/lib/axios";
@@ -81,6 +80,19 @@ function RekamMedisForm() {
     formState: { errors },
   } = useForm<RekamMedisFormData>({
     resolver: yupResolver(rekamMedisSchema) as any,
+  });
+
+  // Tarik data Obat dari Database
+  const { data: listObat = [] } = useQuery({
+    queryKey: ["obatList"],
+    queryFn: async () => {
+      try {
+        const res = await api.get("/obat");
+        return res.data?.data || [];
+      } catch (error) {
+        return [];
+      }
+    },
   });
 
   // Mutasi untuk menyimpan Rekam Medis
@@ -158,9 +170,7 @@ function RekamMedisForm() {
               variant="underlined"
               classNames={{ tabList: "px-6 pt-4", panel: "p-6 bg-slate-50/50" }}
             >
-              {/* =========================================================== */}
               {/* TAB 1: VITAL SIGN & ADMINISTRASI */}
-              {/* =========================================================== */}
               <Tab
                 key="vital"
                 title={
@@ -171,7 +181,6 @@ function RekamMedisForm() {
                 }
               >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Bagian Admin */}
                   <div className="flex flex-col gap-4 md:border-r pr-0 md:pr-4">
                     <h3 className="font-semibold text-slate-700 border-b pb-2">
                       Data Administrasi
@@ -204,7 +213,6 @@ function RekamMedisForm() {
                       variant="bordered"
                     />
 
-                    {/* Select: Kondisi Keluar */}
                     <Select
                       {...register("kondisi_keluar")}
                       label="Kondisi Keluar"
@@ -235,7 +243,6 @@ function RekamMedisForm() {
                       </SelectItem>
                     </Select>
 
-                    {/* Select: Cara Keluar */}
                     <Select
                       {...register("cara_keluar")}
                       label="Cara Keluar / Tindak Lanjut"
@@ -265,7 +272,6 @@ function RekamMedisForm() {
                     </Select>
                   </div>
 
-                  {/* Bagian Vital Sign */}
                   <div className="flex flex-col gap-4">
                     <h3 className="font-semibold text-slate-700 border-b pb-2">
                       Kondisi Waktu Keluar
@@ -297,7 +303,6 @@ function RekamMedisForm() {
                       />
                     </div>
 
-                    {/* Select: Keadaan Umum */}
                     <Select
                       {...register("keadaan_umum")}
                       label="Keadaan Umum"
@@ -326,7 +331,6 @@ function RekamMedisForm() {
                       </SelectItem>
                     </Select>
 
-                    {/* Select: Kesadaran */}
                     <Select
                       {...register("kesadaran")}
                       label="Kesadaran (GCS)"
@@ -355,7 +359,6 @@ function RekamMedisForm() {
                       </SelectItem>
                     </Select>
 
-                    {/* Select: Skala Nyeri */}
                     <Select
                       {...register("skala_nyeri")}
                       label="Skala Nyeri (0-10)"
@@ -393,9 +396,7 @@ function RekamMedisForm() {
                 </div>
               </Tab>
 
-              {/* =========================================================== */}
-              {/* TAB 2: ANAMNESIS & FISIK (AES ENCRYPTED) */}
-              {/* =========================================================== */}
+              {/* TAB 2: ANAMNESIS & FISIK */}
               <Tab
                 key="anamnesis"
                 title={
@@ -426,8 +427,6 @@ function RekamMedisForm() {
                         minRows={2}
                         variant="bordered"
                       />
-
-                      {/* Select: Alergi */}
                       <Select
                         {...register("alergi")}
                         label="Alergi"
@@ -475,9 +474,7 @@ function RekamMedisForm() {
                 </div>
               </Tab>
 
-              {/* =========================================================== */}
-              {/* TAB 3: DIAGNOSIS & TERAPI (AES ENCRYPTED) */}
-              {/* =========================================================== */}
+              {/* TAB 3: DIAGNOSIS & TERAPI */}
               <Tab
                 key="diagnosis"
                 title={
@@ -527,16 +524,50 @@ function RekamMedisForm() {
                       </div>
                     </div>
 
-                    {/* Tindakan & Terapi */}
+                    {/* Tindakan & Terapi dengan Quick-Add */}
                     <div className="flex flex-col gap-4">
                       <h3 className="font-semibold text-slate-700 border-b pb-2">
                         Terapi & Tindakan
                       </h3>
+
+                      {/* DROPDOWN SAKTI QUICK-ADD OBAT */}
+                      <Select
+                        label="Tambahkan Obat Cepat (Dari Database)"
+                        placeholder="Klik untuk memilih obat..."
+                        variant="bordered"
+                        color="success"
+                        className="mb-1"
+                        selectedKeys={[]} // Selalu kosong agar dokter bisa pilih obat yang sama berulang kali jika perlu
+                        onSelectionChange={(keys) => {
+                          const obatTerpilih = Array.from(keys)[0] as string;
+                          if (obatTerpilih) {
+                            const teksSekarang =
+                              watch("terapi_pengobatan") || "";
+                            // Sisipkan nama obat, lalu beri spasi agar dokter tinggal ketik dosisnya
+                            const teksBaru = teksSekarang
+                              ? `${teksSekarang}\n- ${obatTerpilih} `
+                              : `- ${obatTerpilih} `;
+                            setValue("terapi_pengobatan", teksBaru, {
+                              shouldValidate: true,
+                            });
+                          }
+                        }}
+                      >
+                        {listObat.map((obat: any) => (
+                          <SelectItem
+                            key={obat.nama_obat}
+                            value={obat.nama_obat}
+                          >
+                            {obat.nama_obat} ({obat.satuan}) - Stok: {obat.stok}
+                          </SelectItem>
+                        ))}
+                      </Select>
+
                       <Textarea
                         {...register("terapi_pengobatan")}
                         label="Terapi / Pengobatan"
                         placeholder="Contoh: Ringer Laktat, Paracetamol..."
-                        minRows={3}
+                        minRows={4}
                         variant="bordered"
                       />
                       <Textarea
@@ -554,7 +585,6 @@ function RekamMedisForm() {
                     Edukasi & Follow Up
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {/* Select: Rencana Diet */}
                     <Select
                       {...register("rencana_diet")}
                       label="Rencana Diet / Nutrisi"
@@ -579,7 +609,6 @@ function RekamMedisForm() {
                         Makanan Lunak / Cair
                       </SelectItem>
                     </Select>
-
                     <Textarea
                       {...register("edukasi")}
                       label="Edukasi Tambahan"
@@ -595,7 +624,6 @@ function RekamMedisForm() {
           </CardBody>
         </Card>
 
-        {/* Tombol Aksi di Luar Tab */}
         <div className="flex justify-end gap-4 mt-6">
           <Button variant="flat" onPress={() => router.back()}>
             Batal
@@ -618,7 +646,7 @@ function RekamMedisForm() {
 }
 
 // =========================================================================
-// 3. PEMBUNGKUS SUSPENSE (BEST PRACTICE NEXT.JS 14+)
+// 3. PEMBUNGKUS SUSPENSE
 // =========================================================================
 export default function InputRekamMedisPage() {
   return (
