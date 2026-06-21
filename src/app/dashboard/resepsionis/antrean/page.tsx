@@ -26,7 +26,6 @@ import {
   AutocompleteItem,
   Card,
   CardBody,
-  Input,
 } from "@nextui-org/react";
 import {
   Plus,
@@ -44,7 +43,7 @@ import api from "@/lib/axios";
 interface Pasien {
   id_rm: string;
   nama: string;
-  nik: string;
+  // nik dihapus dari sini
 }
 
 interface Antrean {
@@ -65,7 +64,7 @@ const antreanSchema = yup.object().shape({
   status_pasien: yup.string().required("Pilih status pasien"),
   instalasi: yup.string().required("Pilih instalasi"),
   unit_pelayanan: yup.string().required("Pilih unit pelayanan (Poli)"),
-  sub_unit: yup.string(),
+  sub_unit: yup.string().optional(),
   cara_bayar: yup.string().required("Pilih cara bayar"),
 });
 
@@ -77,12 +76,12 @@ export default function AntreanPage() {
   const [errorMsg, setErrorMsg] = useState("");
 
   const {
-    register,
     handleSubmit,
     setValue,
     watch,
     reset,
     control,
+    register, // Tetap dibiarkan jika ada field yang pakai register
     formState: { errors },
   } = useForm<AntreanFormData>({
     resolver: yupResolver(antreanSchema) as any,
@@ -126,16 +125,12 @@ export default function AntreanPage() {
   // =========================================================================
   // 3. FILTER DATA HARI INI & KALKULASI STATISTIK
   // =========================================================================
-
-  // Ambil tanggal hari ini dalam format lokal (mengabaikan jam)
   const todayStr = new Date().toDateString();
 
-  // Menyaring antrean agar hanya menampilkan pendaftaran hari ini saja
   const antreanHariIni = listAntrean.filter((a) => {
     return new Date(a.tgl_registrasi).toDateString() === todayStr;
   });
 
-  // Statistik sekarang merujuk ke antreanHariIni, bukan listAntrean keseluruhan
   const totalAntrean = antreanHariIni.length;
   const tungguPoli = antreanHariIni.filter(
     (a) => a.status_antrean === "TUNGGU_POLI",
@@ -330,7 +325,6 @@ export default function AntreanPage() {
           <TableColumn>WAKTU DAFTAR</TableColumn>
           <TableColumn>STATUS</TableColumn>
         </TableHeader>
-        {/* Pastikan items mengarah ke antreanHariIni */}
         <TableBody
           emptyContent={"Belum ada kunjungan hari ini."}
           items={antreanHariIni}
@@ -417,8 +411,9 @@ export default function AntreanPage() {
                             <span className="font-medium text-slate-800">
                               {pasien.nama}
                             </span>
+                            {/* NIK DIHAPUS DARI TAMPILAN AUTOCOMPLETE INI */}
                             <span className="text-tiny text-slate-500">
-                              {pasien.id_rm} | NIK: {pasien.nik}
+                              {pasien.id_rm}
                             </span>
                           </div>
                         </AutocompleteItem>
@@ -504,15 +499,6 @@ export default function AntreanPage() {
                       Poli KIA
                     </SelectItem>
                   </Select>
-
-                  <Input
-                    {...register("sub_unit")}
-                    label="Sub Unit (Opsional)"
-                    variant="bordered"
-                    placeholder="Contoh: Poli TB, Ruang Bersalin"
-                    isInvalid={!!errors.sub_unit}
-                    errorMessage={errors.sub_unit?.message}
-                  />
 
                   <Select
                     {...register("cara_bayar")}

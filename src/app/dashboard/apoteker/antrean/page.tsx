@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useForm, SubmitHandler, Controller } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
+import * as yup from "yup";
 import {
   Table,
   TableHeader,
@@ -10,10 +13,6 @@ import {
   TableRow,
   TableCell,
   Button,
-  Chip,
-  Spinner,
-  Card,
-  CardBody,
   Modal,
   ModalContent,
   ModalHeader,
@@ -22,331 +21,525 @@ import {
   useDisclosure,
   Select,
   SelectItem,
-  Input,
+  Chip,
+  Autocomplete,
+  AutocompleteItem,
+  Card,
+  CardBody,
 } from "@nextui-org/react";
-import { Pill, CheckCircle2, ClipboardCheck, Plus, Trash2 } from "lucide-react";
+import {
+  Plus,
+  ClipboardList,
+  CheckCircle2,
+  Clock,
+  Users,
+  Activity,
+} from "lucide-react";
 import api from "@/lib/axios";
-import toast from "react-hot-toast";
 
-// Asumsi struktur data Obat dari backend
-interface MasterObat {
-  id: number;
-  nama_obat: string;
-  satuan: string;
-  stok: number;
+// =========================================================================
+// 1. INTERFACES & YUP SCHEMA
+// =========================================================================
+interface Pasien {
+  id_rm: string;
+  nama: string;
+  // nik dihapus dari sini
 }
 
-export default function AntreanFarmasiPage() {
+interface Antrean {
+  nopen: string;
+  id_rm: string;
+  status_pasien: string;
+  instalasi: string;
+  unit_pelayanan: string;
+  cara_bayar: string;
+  status_antrean: string;
+  tgl_registrasi: string;
+  pasien: Pasien;
+  safeKey?: string;
+}
+
+const antreanSchema = yup.object().shape({
+  id_rm: yup.string().required("Pilih pasien terlebih dahulu"),
+  status_pasien: yup.string().required("Pilih status pasien"),
+  instalasi: yup.string().required("Pilih instalasi"),
+  unit_pelayanan: yup.string().required("Pilih unit pelayanan (Poli)"),
+  sub_unit: yup.string().optional(),
+  cara_bayar: yup.string().required("Pilih cara bayar"),
+});
+
+type AntreanFormData = yup.InferType<typeof antreanSchema>;
+
+export default function AntreanPage() {
   const queryClient = useQueryClient();
-  const { isOpen, onOpen, onOpenChange } = useDisclosure();
+  const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
+  const [errorMsg, setErrorMsg] = useState("");
 
-  // State untuk Modal Validasi
-  const [selectedPasien, setSelectedPasien] = useState<any>(null);
-  const [keranjangObat, setKeranjangObat] = useState<
-    { id_obat: string; jumlah: string; dosis: string }[]
-  >([]);
+  const {
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    control,
+    register, // Tetap dibiarkan jika ada field yang pakai register
+    formState: { errors },
+  } = useForm<AntreanFormData>({
+    resolver: yupResolver(antreanSchema) as any,
+  });
 
-  // 1. Fetch Antrean Farmasi
-  const { data: listAntrean = [], isLoading } = useQuery({
-    queryKey: ["antreanFarmasi"],
+  // =========================================================================
+  // 2. REACT QUERY (FETCH DATA)
+  // =========================================================================
+  const { data: listAntrean = [] } = useQuery<Antrean[]>({
+    queryKey: ["antreanList"],
     queryFn: async () => {
-      const res = await api.get("/farmasi/antrean");
-      return res.data?.data || [];
+      try {
+        const res = await api.get("/antrean");
+        const fetchedData = res.data?.data || res.data;
+        const safeData = Array.isArray(fetchedData) ? fetchedData : [];
+        return safeData.map((item, index) => ({
+          ...item,
+          safeKey: item.nopen || `fallback-antrean-${index}`,
+        }));
+      } catch (error) {
+        console.error("Gagal menarik data antrean", error);
+        return [];
+      }
     },
     refetchInterval: 5000,
   });
 
-  // 2. Fetch Master Obat (Untuk Dropdown di Modal)
-  const { data: listObat = [] } = useQuery<MasterObat[]>({
-    queryKey: ["masterObat"],
+  const { data: listPasien = [] } = useQuery<Pasien[]>({
+    queryKey: ["pasienListDropdown"],
     queryFn: async () => {
-      // Pastikan kamu punya endpoint ini di backend, jika belum buatkan rute GET /obat
-      const res = await api.get("/obat");
-      return res.data?.data || [];
+      try {
+        const res = await api.get("/pasien");
+        const fetchedData = res.data?.data || res.data;
+        return Array.isArray(fetchedData) ? fetchedData : [];
+      } catch (error) {
+        return [];
+      }
     },
   });
 
-  // 3. Mutasi Update Status & Simpan Validasi Obat
-  const validasiResepMutation = useMutation({
-    mutationFn: async (payload: { nopen: string; dataObat: any[] }) => {
-      // Kirim data obat yang divalidasi, dan update status ke OBAT_SIAP
-      await api.put(`/farmasi/antrean/${payload.nopen}/validasi-resep`, {
-        status_antrean: "OBAT_SIAP",
-        detail_obat: payload.dataObat,
-      });
+  // =========================================================================
+  // 3. FILTER DATA HARI INI & KALKULASI STATISTIK
+  // =========================================================================
+  const todayStr = new Date().toDateString();
+
+  const antreanHariIni = listAntrean.filter((a) => {
+    return new Date(a.tgl_registrasi).toDateString() === todayStr;
+  });
+
+  const totalAntrean = antreanHariIni.length;
+  const tungguPoli = antreanHariIni.filter(
+    (a) => a.status_antrean === "TUNGGU_POLI",
+  ).length;
+  const sedangDiperiksa = antreanHariIni.filter(
+    (a) =>
+      a.status_antrean === "PEMERIKSAAN" || a.status_antrean === "PROSES_POLI",
+  ).length;
+  const selesaiPoli = antreanHariIni.filter(
+    (a) =>
+      a.status_antrean === "SELESAI_POLI" ||
+      a.status_antrean === "TUNGGU_FARMASI" ||
+      a.status_antrean === "FARMASI" ||
+      a.status_antrean === "OBAT_SIAP" ||
+      a.status_antrean === "SELESAI_FARMASI" ||
+      a.status_antrean === "SELESAI",
+  ).length;
+
+  // =========================================================================
+  // 4. MUTASI (POST ANTREAN BARU)
+  // =========================================================================
+  const mutation = useMutation({
+    mutationFn: async (newData: AntreanFormData) => {
+      return await api.post("/antrean", newData);
     },
     onSuccess: () => {
-      toast.success("Resep divalidasi dan Obat siap diserahkan!");
-      queryClient.invalidateQueries({ queryKey: ["antreanFarmasi"] });
-      onOpenChange(); // Tutup modal
+      queryClient.invalidateQueries({ queryKey: ["antreanList"] });
+      onClose();
+      reset();
     },
-    onError: () => toast.error("Gagal memvalidasi resep."),
-  });
-
-  // Mutasi Selesaikan (Serahkan ke Pasien)
-  const serahkanObatMutation = useMutation({
-    mutationFn: async (nopen: string) => {
-      await api.put(`/farmasi/antrean/${nopen}/status`, {
-        status_antrean: "SELESAI_FARMASI",
-      });
-    },
-    onSuccess: () => {
-      toast.success("Obat berhasil diserahkan ke pasien!");
-      queryClient.invalidateQueries({ queryKey: ["antreanFarmasi"] });
+    onError: (error: any) => {
+      setErrorMsg(
+        error.response?.data?.message || "Gagal mendaftarkan antrean.",
+      );
     },
   });
 
-  // Handler Buka Modal
-  const handleOpenValidasi = (item: any) => {
-    setSelectedPasien(item);
-    setKeranjangObat([{ id_obat: "", jumlah: "", dosis: "" }]); // Reset keranjang dgn 1 baris kosong
+  const onSubmitForm: SubmitHandler<AntreanFormData> = (data) => {
+    setErrorMsg("");
+    mutation.mutate(data);
+  };
+
+  const handleOpenModal = () => {
+    reset({});
+    setErrorMsg("");
     onOpen();
   };
 
-  // Handler Keranjang Obat
-  const tambahBarisObat = () =>
-    setKeranjangObat([
-      ...keranjangObat,
-      { id_obat: "", jumlah: "", dosis: "" },
-    ]);
-  const hapusBarisObat = (index: number) =>
-    setKeranjangObat(keranjangObat.filter((_, i) => i !== index));
-  const handleUpdateKeranjang = (
-    index: number,
-    field: string,
-    value: string,
-  ) => {
-    const newData = [...keranjangObat];
-    newData[index] = { ...newData[index], [field]: value };
-    setKeranjangObat(newData);
+  // =========================================================================
+  // 5. RENDER UI
+  // =========================================================================
+  const renderStatus = (status: string) => {
+    switch (status) {
+      case "TUNGGU_POLI":
+        return (
+          <Chip
+            color="warning"
+            variant="flat"
+            size="sm"
+            startContent={<Clock size={12} />}
+          >
+            Tunggu Poli
+          </Chip>
+        );
+      case "PEMERIKSAAN":
+      case "PROSES_POLI":
+        return (
+          <Chip
+            color="primary"
+            variant="flat"
+            size="sm"
+            startContent={<Activity size={12} />}
+          >
+            Diperiksa
+          </Chip>
+        );
+      case "SELESAI_POLI":
+      case "TUNGGU_FARMASI":
+      case "FARMASI":
+      case "OBAT_SIAP":
+      case "SELESAI_FARMASI":
+      case "SELESAI":
+        return (
+          <Chip
+            color="success"
+            variant="flat"
+            size="sm"
+            startContent={<CheckCircle2 size={12} />}
+          >
+            Selesai
+          </Chip>
+        );
+      default:
+        return (
+          <Chip color="default" variant="flat" size="sm">
+            {status}
+          </Chip>
+        );
+    }
   };
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6 flex items-center gap-2 text-slate-800">
-        <Pill className="text-klinik-blue" /> Validasi Layanan Farmasi
-      </h1>
+    <div className="flex flex-col gap-6">
+      {/* HEADER */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">
+            Menara Pengawas Kunjungan
+          </h1>
+          <p className="text-sm text-slate-500">
+            Pantau seluruh pergerakan pasien hari ini di semua unit pelayanan.
+          </p>
+        </div>
+        <Button
+          color="primary"
+          className="bg-klinik-blue font-semibold shadow-md"
+          startContent={<Plus size={18} />}
+          onPress={handleOpenModal}
+        >
+          Daftar Antrean
+        </Button>
+      </div>
 
-      <Table aria-label="Antrean Farmasi" className="shadow-sm">
+      {/* 4 KARTU RINGKASAN */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card className="shadow-sm border border-slate-100">
+          <CardBody className="flex flex-row items-center gap-3 p-4">
+            <div className="p-2 bg-slate-100 text-slate-600 rounded-lg">
+              <Users size={20} />
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 font-semibold uppercase">
+                Total Hari Ini
+              </p>
+              <h3 className="text-xl font-bold text-slate-800">
+                {totalAntrean}
+              </h3>
+            </div>
+          </CardBody>
+        </Card>
+        <Card className="shadow-sm border border-amber-100 bg-amber-50/30">
+          <CardBody className="flex flex-row items-center gap-3 p-4">
+            <div className="p-2 bg-amber-100 text-amber-600 rounded-lg">
+              <Clock size={20} />
+            </div>
+            <div>
+              <p className="text-xs text-amber-600 font-semibold uppercase">
+                Menunggu Poli
+              </p>
+              <h3 className="text-xl font-bold text-amber-900">{tungguPoli}</h3>
+            </div>
+          </CardBody>
+        </Card>
+        <Card className="shadow-sm border border-blue-100 bg-blue-50/30">
+          <CardBody className="flex flex-row items-center gap-3 p-4">
+            <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+              <Activity size={20} />
+            </div>
+            <div>
+              <p className="text-xs text-blue-600 font-semibold uppercase">
+                Diperiksa
+              </p>
+              <h3 className="text-xl font-bold text-blue-900">
+                {sedangDiperiksa}
+              </h3>
+            </div>
+          </CardBody>
+        </Card>
+        <Card className="shadow-sm border border-emerald-100 bg-emerald-50/30">
+          <CardBody className="flex flex-row items-center gap-3 p-4">
+            <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
+              <CheckCircle2 size={20} />
+            </div>
+            <div>
+              <p className="text-xs text-emerald-600 font-semibold uppercase">
+                Selesai
+              </p>
+              <h3 className="text-xl font-bold text-emerald-900">
+                {selesaiPoli}
+              </h3>
+            </div>
+          </CardBody>
+        </Card>
+      </div>
+
+      {/* TABEL ANTREAN */}
+      <Table aria-label="Tabel Antrean Hari Ini" className="shadow-sm">
         <TableHeader>
-          <TableColumn>PASIEN & POLI</TableColumn>
-          <TableColumn>RESEP DARI DOKTER</TableColumn>
+          <TableColumn>NOPEN</TableColumn>
+          <TableColumn>NAMA PASIEN</TableColumn>
+          <TableColumn>POLIKLINIK</TableColumn>
+          <TableColumn>WAKTU DAFTAR</TableColumn>
           <TableColumn>STATUS</TableColumn>
-          <TableColumn align="center">AKSI APOTEKER</TableColumn>
         </TableHeader>
         <TableBody
-          emptyContent={isLoading ? <Spinner /> : "Tidak ada resep baru"}
-          items={listAntrean}
+          emptyContent={"Belum ada kunjungan hari ini."}
+          items={antreanHariIni}
         >
-          {(item: any) => (
-            <TableRow key={item.nopen}>
-              <TableCell>
-                <p className="font-bold uppercase text-slate-800">
-                  {item.pasien?.nama}
-                </p>
-                <p className="text-xs text-slate-500">
-                  {item.nopen} | {item.unit_pelayanan}
-                </p>
+          {(antrean) => (
+            <TableRow key={antrean.safeKey}>
+              <TableCell className="font-mono text-xs text-slate-500">
+                {antrean.nopen}
               </TableCell>
-
               <TableCell>
-                <Card
-                  shadow="none"
-                  className="bg-slate-50 border border-slate-200"
-                >
-                  <CardBody className="p-2 text-xs font-mono text-slate-700">
-                    {item.resep_obat || "Tidak ada resep tertulis"}
-                  </CardBody>
-                </Card>
-              </TableCell>
-
-              <TableCell>
-                <Chip
-                  color={
-                    item.status_antrean === "TUNGGU_FARMASI"
-                      ? "warning"
-                      : item.status_antrean === "OBAT_SIAP"
-                        ? "success"
-                        : "default"
-                  }
-                  variant="flat"
-                  size="sm"
-                  className="font-bold"
-                >
-                  {item.status_antrean.replace("_", " ")}
-                </Chip>
-              </TableCell>
-
-              <TableCell>
-                <div className="flex gap-2">
-                  {/* Tombol Validasi Obat */}
-                  {item.status_antrean === "TUNGGU_FARMASI" && (
-                    <Button
-                      size="sm"
-                      color="primary"
-                      onPress={() => handleOpenValidasi(item)}
-                      startContent={<ClipboardCheck size={16} />}
-                    >
-                      Validasi Obat
-                    </Button>
-                  )}
-
-                  {/* Tombol Serahkan Obat (Menutup SLA Farmasi) */}
-                  {item.status_antrean === "OBAT_SIAP" && (
-                    <Button
-                      size="sm"
-                      color="success"
-                      className="text-white font-semibold"
-                      onPress={() => serahkanObatMutation.mutate(item.nopen)}
-                      startContent={<CheckCircle2 size={16} />}
-                    >
-                      Serahkan Pasien
-                    </Button>
-                  )}
+                <div className="flex flex-col">
+                  <span className="font-bold text-slate-700">
+                    {antrean.pasien?.nama || "Unknown"}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    {antrean.id_rm}
+                  </span>
                 </div>
               </TableCell>
+              <TableCell>
+                <span className="font-medium">{antrean.unit_pelayanan}</span>
+              </TableCell>
+              <TableCell>
+                {new Date(antrean.tgl_registrasi).toLocaleTimeString("id-ID", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </TableCell>
+              <TableCell>{renderStatus(antrean.status_antrean)}</TableCell>
             </TableRow>
           )}
         </TableBody>
       </Table>
 
-      {/* ============================================================== */}
-      {/* MODAL VALIDASI RESEP (MENGUBAH TEKS MENJADI DATA OBAT ASLI)    */}
-      {/* ============================================================== */}
+      {/* MODAL FORM PENDAFTARAN ANTREAN */}
       <Modal
         isOpen={isOpen}
         onOpenChange={onOpenChange}
-        size="4xl"
-        scrollBehavior="inside"
+        placement="center"
+        size="2xl"
       >
         <ModalContent>
           {(onClose) => (
-            <>
-              <ModalHeader className="flex flex-col gap-1 border-b">
-                Validasi Resep: {selectedPasien?.pasien?.nama}
-                <span className="text-xs font-normal text-slate-500">
-                  Cocokkan resep dokter dengan ketersediaan obat di apotek.
-                </span>
-              </ModalHeader>
-              <ModalBody className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
-                {/* KIRI: Catatan Dokter */}
-                <div className="flex flex-col gap-2">
-                  <h3 className="font-bold text-sm text-slate-700">
-                    Catatan Resep Dokter
-                  </h3>
-                  <Card className="bg-amber-50/50 border border-amber-200 h-full min-h-[200px]">
-                    <CardBody className="font-mono text-sm text-slate-800 whitespace-pre-wrap">
-                      {selectedPasien?.resep_obat ||
-                        "Dokter tidak menulis resep."}
-                    </CardBody>
-                  </Card>
+            <form onSubmit={handleSubmit(onSubmitForm)}>
+              <ModalHeader className="flex items-center gap-2 border-b">
+                <ClipboardList className="text-klinik-blue" size={24} />
+                <div className="flex flex-col">
+                  <span className="text-lg font-bold">Registrasi Antrean</span>
+                  <p className="text-xs text-slate-400 font-normal">
+                    Pilih pasien dan arahkan ke poli tujuan.
+                  </p>
                 </div>
+              </ModalHeader>
 
-                {/* KANAN: Input Validasi Apoteker */}
-                <div className="flex flex-col gap-4">
-                  <h3 className="font-bold text-sm text-slate-700 flex justify-between items-center">
-                    Obat yang Diberikan
-                    <Button
-                      size="sm"
-                      color="primary"
-                      variant="flat"
-                      onPress={tambahBarisObat}
-                      startContent={<Plus size={14} />}
-                    >
-                      Tambah Obat
-                    </Button>
-                  </h3>
-
-                  <div className="flex flex-col gap-3">
-                    {keranjangObat.map((row, index) => (
-                      <div
-                        key={index}
-                        className="flex gap-2 items-start bg-slate-50 p-2 rounded-lg border border-slate-100"
-                      >
-                        <Select
-                          size="sm"
-                          label="Pilih Obat"
-                          selectedKeys={row.id_obat ? [row.id_obat] : []}
-                          onChange={(e) =>
-                            handleUpdateKeranjang(
-                              index,
-                              "id_obat",
-                              e.target.value,
-                            )
-                          }
-                          className="w-[45%]"
-                        >
-                          {listObat.map((obat) => (
-                            <SelectItem
-                              key={obat.id}
-                              value={obat.id.toString()}
-                            >
-                              {obat.nama_obat} (Stok: {obat.stok})
-                            </SelectItem>
-                          ))}
-                        </Select>
-                        <Input
-                          size="sm"
-                          type="number"
-                          label="Jml"
-                          placeholder="0"
-                          value={row.jumlah}
-                          onChange={(e) =>
-                            handleUpdateKeranjang(
-                              index,
-                              "jumlah",
-                              e.target.value,
-                            )
-                          }
-                          className="w-[20%]"
-                        />
-                        <Input
-                          size="sm"
-                          label="Aturan Pakai"
-                          placeholder="3x1 Sesudah Makan"
-                          value={row.dosis}
-                          onChange={(e) =>
-                            handleUpdateKeranjang(
-                              index,
-                              "dosis",
-                              e.target.value,
-                            )
-                          }
-                          className="flex-1"
-                        />
-                        <Button
-                          isIconOnly
-                          color="danger"
-                          variant="light"
-                          size="sm"
-                          className="mt-2"
-                          onPress={() => hapusBarisObat(index)}
-                        >
-                          <Trash2 size={18} />
-                        </Button>
-                      </div>
-                    ))}
+              <ModalBody className="py-6 flex flex-col gap-4">
+                {errorMsg && (
+                  <div className="p-3 bg-red-100 text-red-700 text-sm rounded-lg text-center font-medium">
+                    {errorMsg}
                   </div>
+                )}
+
+                <Controller
+                  name="id_rm"
+                  control={control}
+                  render={({ field }) => (
+                    <Autocomplete
+                      isRequired
+                      label="Cari Pasien (Nama atau ID RM)"
+                      variant="bordered"
+                      defaultItems={listPasien}
+                      selectedKey={field.value || ""}
+                      onSelectionChange={(key) => {
+                        field.onChange(key ? String(key) : "");
+                      }}
+                      isInvalid={!!errors.id_rm}
+                      errorMessage={errors.id_rm?.message}
+                    >
+                      {(pasien) => (
+                        <AutocompleteItem
+                          key={pasien.id_rm}
+                          textValue={`${pasien.nama} (${pasien.id_rm})`}
+                        >
+                          <div className="flex flex-col">
+                            <span className="font-medium text-slate-800">
+                              {pasien.nama}
+                            </span>
+                            {/* NIK DIHAPUS DARI TAMPILAN AUTOCOMPLETE INI */}
+                            <span className="text-tiny text-slate-500">
+                              {pasien.id_rm}
+                            </span>
+                          </div>
+                        </AutocompleteItem>
+                      )}
+                    </Autocomplete>
+                  )}
+                />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Select
+                    {...register("status_pasien")}
+                    isRequired
+                    label="Status Pasien"
+                    variant="bordered"
+                    selectedKeys={
+                      watch("status_pasien") ? [watch("status_pasien")] : []
+                    }
+                    onSelectionChange={(keys) =>
+                      setValue("status_pasien", Array.from(keys)[0] as string, {
+                        shouldValidate: true,
+                      })
+                    }
+                    isInvalid={!!errors.status_pasien}
+                    errorMessage={errors.status_pasien?.message}
+                  >
+                    <SelectItem key="Baru" value="Baru">
+                      Baru
+                    </SelectItem>
+                    <SelectItem key="Lama" value="Lama">
+                      Lama
+                    </SelectItem>
+                  </Select>
+
+                  <Select
+                    {...register("instalasi")}
+                    isRequired
+                    label="Instalasi"
+                    variant="bordered"
+                    selectedKeys={
+                      watch("instalasi") ? [watch("instalasi")] : []
+                    }
+                    onSelectionChange={(keys) =>
+                      setValue("instalasi", Array.from(keys)[0] as string, {
+                        shouldValidate: true,
+                      })
+                    }
+                    isInvalid={!!errors.instalasi}
+                    errorMessage={errors.instalasi?.message}
+                  >
+                    <SelectItem key="Rawat Jalan" value="Rawat Jalan">
+                      Rawat Jalan
+                    </SelectItem>
+                    <SelectItem key="UGD" value="UGD">
+                      UGD
+                    </SelectItem>
+                  </Select>
+
+                  <Select
+                    {...register("unit_pelayanan")}
+                    isRequired
+                    label="Unit Pelayanan (Poli Tujuan)"
+                    variant="bordered"
+                    selectedKeys={
+                      watch("unit_pelayanan") ? [watch("unit_pelayanan")] : []
+                    }
+                    onSelectionChange={(keys) =>
+                      setValue(
+                        "unit_pelayanan",
+                        Array.from(keys)[0] as string,
+                        { shouldValidate: true },
+                      )
+                    }
+                    isInvalid={!!errors.unit_pelayanan}
+                    errorMessage={errors.unit_pelayanan?.message}
+                  >
+                    <SelectItem key="Poli Umum" value="Poli Umum">
+                      Poli Umum
+                    </SelectItem>
+                    <SelectItem key="Poli Gigi" value="Poli Gigi">
+                      Poli Gigi
+                    </SelectItem>
+                    <SelectItem key="Poli KIA" value="Poli KIA">
+                      Poli KIA
+                    </SelectItem>
+                  </Select>
+
+                  <Select
+                    {...register("cara_bayar")}
+                    isRequired
+                    label="Cara Bayar"
+                    variant="bordered"
+                    selectedKeys={
+                      watch("cara_bayar") ? [watch("cara_bayar")] : []
+                    }
+                    onSelectionChange={(keys) =>
+                      setValue("cara_bayar", Array.from(keys)[0] as string, {
+                        shouldValidate: true,
+                      })
+                    }
+                    isInvalid={!!errors.cara_bayar}
+                    errorMessage={errors.cara_bayar?.message}
+                  >
+                    <SelectItem key="Umum" value="Umum">
+                      Umum / Pribadi
+                    </SelectItem>
+                    <SelectItem key="BPJS" value="BPJS">
+                      BPJS Kesehatan
+                    </SelectItem>
+                  </Select>
                 </div>
               </ModalBody>
-              <ModalFooter className="border-t">
-                <Button color="danger" variant="light" onPress={onClose}>
+
+              <ModalFooter className="border-t bg-slate-50">
+                <Button color="danger" variant="flat" onPress={onClose}>
                   Batal
                 </Button>
                 <Button
                   color="primary"
-                  isLoading={validasiResepMutation.isPending}
-                  onPress={() =>
-                    validasiResepMutation.mutate({
-                      nopen: selectedPasien?.nopen,
-                      dataObat: keranjangObat,
-                    })
-                  }
+                  className="bg-klinik-blue font-semibold"
+                  type="submit"
+                  isLoading={mutation.isPending}
                 >
-                  Selesai Validasi & Siapkan Obat
+                  {mutation.isPending ? "Memproses..." : "Daftarkan ke Poli"}
                 </Button>
               </ModalFooter>
-            </>
+            </form>
           )}
         </ModalContent>
       </Modal>
