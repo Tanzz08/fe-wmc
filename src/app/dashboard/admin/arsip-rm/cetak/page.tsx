@@ -1,343 +1,419 @@
 "use client";
 
 import { Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Button, Spinner } from "@nextui-org/react";
-import { Printer, ArrowLeft, AlertTriangle } from "lucide-react";
+import { Printer, ArrowLeft } from "lucide-react";
 import api from "@/lib/axios";
 
 function CetakDokumen() {
   const searchParams = useSearchParams();
-  const router = useRouter();
+  const nopen = searchParams.get("nopen") as string;
 
-  // Mengambil parameter dari URL
-  const id_rm = searchParams.get("id_rm");
-  const nopen = searchParams.get("nopen");
-
-  // Ambil data pasien (beserta array rekam medisnya)
   const {
-    data: detailPasien,
+    data: rm,
+    error,
     isLoading,
-    isError,
   } = useQuery({
-    queryKey: ["pasienDetailCetak", id_rm],
+    queryKey: ["rekamMedisDetail", nopen],
     queryFn: async () => {
-      const res = await api.get(`/pasien/${id_rm}`);
-      return res.data?.data;
+      // Pastikan endpoint backend ini sudah ada dan meng-include relasi 'pasien' & 'antrean'
+      const response = await api.get(`/rekam-medis/${nopen}`);
+      return response.data?.data;
     },
-    // Query baru berjalan jika id_rm sudah didapatkan dari URL
-    enabled: !!id_rm,
+    enabled: !!nopen,
   });
 
-  // Jika sedang loading
-  if (isLoading) {
+  const handlePrint = () => {
+    window.print();
+  };
+
+  if (isLoading)
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center">
-        <Spinner size="lg" color="primary" />
-        <p className="mt-4 text-slate-500 font-medium">
-          Menarik data dari brankas enkripsi...
-        </p>
+      <div className="flex justify-center items-center min-h-screen">
+        <Spinner size="lg" label="Menyiapkan Dokumen Cetak..." />
       </div>
     );
-  }
 
-  // 1. ERROR: Jika parameter URL tidak lengkap
-  if (!id_rm || !nopen) {
+  if (error || !rm)
     return (
-      <div className="p-10 flex flex-col items-center text-center mt-10">
-        <AlertTriangle size={48} className="text-warning mb-4" />
-        <h2 className="text-xl font-bold text-slate-800">URL Tidak Valid</h2>
-        <p className="text-slate-500 mb-4">
-          Parameter ID_RM atau NOPEN hilang dari link.
-        </p>
-        <Button onPress={() => router.back()} color="primary">
-          Kembali
-        </Button>
-      </div>
-    );
-  }
-
-  // 2. ERROR: Jika API gagal atau pasien tidak ditemukan di Database
-  if (isError || !detailPasien) {
-    return (
-      <div className="p-10 flex flex-col items-center text-center mt-10">
-        <AlertTriangle size={48} className="text-danger mb-4" />
-        <h2 className="text-xl font-bold text-slate-800">
-          Gagal Memuat Data Pasien
+      <div className="flex flex-col items-center justify-center min-h-screen text-center p-4">
+        <h2 className="text-xl font-bold text-red-600 mb-2">
+          Gagal Memuat Data
         </h2>
-        <p className="text-slate-500 mb-4">
-          Pasien dengan ID <b>{id_rm}</b> tidak ditemukan atau terjadi masalah
-          server.
+        <p className="text-slate-600">
+          Pastikan Rekam Medis untuk pendaftaran {nopen} tersedia.
         </p>
-        <Button onPress={() => router.back()} color="default">
+        <Button className="mt-4" onPress={() => window.history.back()}>
           Kembali
         </Button>
       </div>
     );
+
+  let lamaDirawat = "-";
+  if (rm.tgl_masuk && rm.tgl_keluar) {
+    const msDiff =
+      new Date(rm.tgl_keluar).getTime() - new Date(rm.tgl_masuk).getTime();
+    const daysDiff = Math.ceil(msDiff / (1000 * 60 * 60 * 24));
+    lamaDirawat = `${daysDiff} Hari`;
   }
 
-  // Cari rekam medis yang spesifik sesuai nopen yang di-klik
-  const rekamMedis = detailPasien.rekamMedis?.find(
-    (rm: any) => rm.nopen === nopen,
-  );
-
-  // 3. ERROR: Jika Nopen tidak cocok dengan histori pasien ini
-  if (!rekamMedis) {
-    return (
-      <div className="p-10 flex flex-col items-center text-center mt-10">
-        <AlertTriangle size={48} className="text-danger mb-4" />
-        <h2 className="text-xl font-bold text-slate-800">
-          Riwayat Tidak Ditemukan
-        </h2>
-        <p className="text-slate-500 mb-4">
-          Data pasien <b>{detailPasien.nama}</b> berhasil dimuat, tetapi
-          kunjungan dengan Nomor: <br />
-          <b className="text-klinik-blue">{nopen}</b> tidak ada di dalam
-          riwayatnya.
-        </p>
-        <Button onPress={() => router.back()} color="default">
-          Kembali
-        </Button>
-      </div>
-    );
-  }
-
-  // Jika semua data aman, Format Tanggal
-  const tglLahir = detailPasien.tanggal_lahir
-    ? new Date(detailPasien.tanggal_lahir).toLocaleDateString("id-ID")
-    : "-";
-  const tglPeriksa = rekamMedis.waktu_periksa
-    ? new Date(rekamMedis.waktu_periksa).toLocaleDateString("id-ID", {
-        weekday: "long",
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "-";
+    return new Date(dateStr)
+      .toLocaleString("id-ID", {
+        day: "2-digit",
+        month: "2-digit",
         year: "numeric",
-        month: "long",
-        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
       })
-    : "-";
+      .replace(/\./g, ":");
+  };
 
   return (
-    <div className="min-h-screen bg-slate-200 py-10 print:py-0 print:bg-white flex flex-col items-center">
-      {/* TOMBOL AKSI (Hanya muncul di layar, otomatis hilang di kertas PDF) */}
-      <div className="w-full max-w-4xl flex justify-between mb-4 print:hidden px-4">
-        <Button
-          variant="flat"
-          color="default"
-          className="bg-white font-semibold"
-          startContent={<ArrowLeft size={18} />}
-          onPress={() => router.back()}
-        >
-          Kembali ke Arsip
-        </Button>
-        <Button
-          color="primary"
-          className="bg-klinik-blue font-bold shadow-md"
-          startContent={<Printer size={18} />}
-          onPress={() => window.print()}
-        >
-          Cetak PDF / Print
-        </Button>
-      </div>
+    <>
+      {/* JURUS CSS KHUSUS PRINT: Mencegah Header/Footer Browser dan Memaksa Warna Tampil */}
+      <style type="text/css">
+        {`
+          @media print {
+            @page {
+              size: A4 portrait;
+              margin: 0; /* Menghapus teks URL dan Tanggal otomatis dari browser */
+            }
+            body {
+              margin: 0;
+              -webkit-print-color-adjust: exact !important; /* Memaksa background hitam tercetak */
+              print-color-adjust: exact !important;
+            }
+            /* Menyembunyikan sidebar dan header utama aplikasi agar tidak mengganggu layout cetak */
+            aside, header, nav {
+              display: none !important;
+            }
+          }
+        `}
+      </style>
 
-      {/* KERTAS A4 */}
-      <div className="bg-white w-full max-w-4xl p-10 md:p-16 shadow-2xl print:shadow-none print:p-0 text-slate-800 text-sm leading-relaxed">
-        {/* KOP SURAT */}
-        <div className="flex items-center border-b-4 border-slate-800 pb-6 mb-6">
-          <div className="w-20 h-20 bg-blue-100 text-klinik-blue flex items-center justify-center font-black text-2xl rounded-full mr-6">
-            WMC
-          </div>
-          <div>
-            <h1 className="text-2xl font-black uppercase tracking-wide">
-              Klinik Wira Medika Center
-            </h1>
-            <p className="text-slate-600">
-              Jl. Perintis Kemerdekaan No. 123, Makassar, Sulawesi Selatan
-            </p>
-            <p className="text-slate-600">
-              Telp: (0411) 123456 | Email: info@klinikwmc.com
-            </p>
-          </div>
+      {/* Tambahan Tailwind print:absolute print:inset-0 print:z-[99999] 
+        Ini akan "mencabut" halaman ini dari layout dashboard saat di-print
+      */}
+      <div className="min-h-screen bg-slate-200 py-8 font-serif print:bg-white print:py-0 print:absolute print:left-0 print:top-0 print:w-full print:z-[99999] print:block">
+        {/* Tombol Kontrol */}
+        <div className="max-w-[210mm] mx-auto mb-4 flex justify-between print:hidden px-4 sm:px-0">
+          <Button
+            variant="flat"
+            className="bg-white shadow-sm"
+            onPress={() => window.history.back()}
+            startContent={<ArrowLeft size={16} />}
+          >
+            Kembali
+          </Button>
+          <Button
+            color="primary"
+            className="shadow-sm font-semibold"
+            onPress={handlePrint}
+            startContent={<Printer size={16} />}
+          >
+            Cetak PDF / Print
+          </Button>
         </div>
 
-        <h2 className="text-center text-xl font-bold uppercase underline mb-8">
-          Ringkasan Rekam Medis Pasien
-        </h2>
+        {/* KERTAS A4 */}
+        <div className="w-[210mm] min-h-[297mm] mx-auto bg-white p-[10mm] shadow-lg print:shadow-none print:w-[210mm] print:h-[297mm] print:p-[15mm] print:m-0 text-[11px] leading-tight text-black border border-transparent print:border-none box-border print:overflow-hidden">
+          {/* KOP SURAT */}
+          <div className="flex border border-black mb-1">
+            <div className="w-20 flex items-center justify-center border-r border-black p-2">
+              <div className="w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center text-[8px] overflow-hidden font-bold">
+                WMC
+              </div>
+            </div>
+            <div className="flex-1 text-center flex flex-col justify-center py-2">
+              <h1 className="font-bold text-lg uppercase">
+                WIHDATUL UMMAH MEDICAL CENTER
+              </h1>
+              <p>
+                Jl. DR. Leimena No.9, Tello Baru, Kec. Panakkukang, Kota
+                Makassar
+              </p>
+            </div>
+          </div>
 
-        {/* BIODATA PASIEN */}
-        <table className="w-full mb-8">
-          <tbody>
-            <tr>
-              <td className="py-1 w-40 font-semibold text-slate-600">
-                No. Rekam Medis
-              </td>
-              <td className="py-1 w-4">:</td>
-              <td className="py-1 font-bold">{detailPasien.id_rm}</td>
-              <td className="py-1 w-32 font-semibold text-slate-600">
-                No. Pendaftaran
-              </td>
-              <td className="py-1 w-4">:</td>
-              <td className="py-1 font-mono text-xs">{rekamMedis.nopen}</td>
-            </tr>
-            <tr>
-              <td className="py-1 font-semibold text-slate-600">Nama Pasien</td>
-              <td className="py-1">:</td>
-              <td className="py-1 uppercase font-bold">{detailPasien.nama}</td>
-              <td className="py-1 font-semibold text-slate-600">
-                Tanggal Periksa
-              </td>
-              <td className="py-1">:</td>
-              <td className="py-1">{tglPeriksa}</td>
-            </tr>
-            <tr>
-              <td className="py-1 font-semibold text-slate-600">
-                Tanggal Lahir
-              </td>
-              <td className="py-1">:</td>
-              <td className="py-1">{tglLahir}</td>
-              <td className="py-1 font-semibold text-slate-600">
-                Jenis Kelamin
-              </td>
-              <td className="py-1">:</td>
-              <td className="py-1">{detailPasien.jenis_kelamin}</td>
-            </tr>
-            <tr>
-              <td className="py-1 font-semibold align-top text-slate-600">
-                Alamat
-              </td>
-              <td className="py-1 align-top">:</td>
-              <td className="py-1 align-top pr-4">{detailPasien.alamat}</td>
-              <td className="py-1 font-semibold align-top text-slate-600">
-                No. Telepon
-              </td>
-              <td className="py-1 align-top">:</td>
-              <td className="py-1 align-top">{detailPasien.no_telepon}</td>
-            </tr>
-          </tbody>
-        </table>
+          {/* JUDUL */}
+          <div className="bg-black text-white text-center font-bold py-1 mb-1 text-sm uppercase">
+            Ringkasan Pulang
+          </div>
 
-        {/* DATA KLINIS */}
-        <div className="border border-slate-300 rounded-lg overflow-hidden mb-8">
-          <div className="bg-slate-100 font-bold px-4 py-2 border-b border-slate-300">
-            A. Tanda Vital & Kondisi Fisik
-          </div>
-          <div className="p-4 grid grid-cols-4 gap-4">
-            <div>
-              <span className="text-slate-500 block text-xs">Tensi Darah</span>
-              <span className="font-bold">
-                {rekamMedis.tensi_darah || "-"} mmHg
-              </span>
+          {/* IDENTITAS GRID */}
+          <div className="border border-black flex flex-col">
+            <div className="flex border-b border-black">
+              <div className="flex-1 border-r border-black p-1">
+                <span className="block">Nama Pasien :</span>
+                <span className="font-bold uppercase">{rm.pasien?.nama}</span>
+              </div>
+              <div className="w-1/4 border-r border-black p-1">
+                <span className="block">No RM :</span>
+                <span className="font-bold">{rm.id_rm}</span>
+              </div>
+              <div className="w-1/4 border-r border-black p-1">
+                <span className="block">Tgl Lahir :</span>
+                <span className="font-bold">
+                  {rm.pasien?.tanggal_lahir
+                    ? new Date(rm.pasien.tanggal_lahir).toLocaleDateString(
+                        "id-ID",
+                      )
+                    : "-"}
+                </span>
+              </div>
+              <div className="w-1/4 p-1">
+                <span className="block">Jenis Kelamin :</span>
+                <span className="font-bold">{rm.pasien?.jenis_kelamin}</span>
+              </div>
             </div>
-            <div>
-              <span className="text-slate-500 block text-xs">Suhu Tubuh</span>
-              <span className="font-bold">{rekamMedis.suhu || "-"} °C</span>
-            </div>
-            <div>
-              <span className="text-slate-500 block text-xs">Nadi</span>
-              <span className="font-bold">{rekamMedis.nadi || "-"} x/mnt</span>
-            </div>
-            <div>
-              <span className="text-slate-500 block text-xs">Pernapasan</span>
-              <span className="font-bold">{rekamMedis.napas || "-"} x/mnt</span>
-            </div>
-            <div className="col-span-2">
-              <span className="text-slate-500 block text-xs">Keadaan Umum</span>
-              <span className="font-bold capitalize">
-                {rekamMedis.keadaan_umum || "-"}
-              </span>
-            </div>
-            <div className="col-span-2">
-              <span className="text-slate-500 block text-xs">Kesadaran</span>
-              <span className="font-bold capitalize">
-                {rekamMedis.kesadaran || "-"}
-              </span>
-            </div>
-          </div>
-        </div>
 
-        <div className="border border-slate-300 rounded-lg overflow-hidden mb-8">
-          <div className="bg-slate-100 font-bold px-4 py-2 border-b border-slate-300">
-            B. Anamnesis & Diagnosis
-          </div>
-          <div className="p-4 flex flex-col gap-4">
-            <div>
-              <p className="font-semibold text-slate-600">
-                Riwayat Penyakit Sekarang (Keluhan):
-              </p>
-              <p className="whitespace-pre-wrap mt-1">
-                {rekamMedis.riwayat_sekarang || "-"}
-              </p>
+            <div className="flex border-b border-black">
+              <div className="w-1/4 border-r border-black p-1">
+                <span className="block">Tgl Masuk :</span>
+                <span className="font-bold">{formatDate(rm.tgl_masuk)}</span>
+              </div>
+              <div className="w-1/4 border-r border-black p-1">
+                <span className="block">Tgl Keluar :</span>
+                <span className="font-bold">{formatDate(rm.tgl_keluar)}</span>
+              </div>
+              <div className="w-1/4 border-r border-black p-1">
+                <span className="block">Lama Dirawat :</span>
+                <span className="font-bold">{lamaDirawat}</span>
+              </div>
+              <div className="w-1/4 p-1">
+                <span className="block">Ruang Rawat Terakhir :</span>
+                <span className="font-bold">{rm.ruang_rawat || "-"}</span>
+              </div>
             </div>
-            <div>
-              <p className="font-semibold text-slate-600">Pemeriksaan Fisis:</p>
-              <p className="whitespace-pre-wrap mt-1">
-                {rekamMedis.pemeriksaan_fisis || "-"}
-              </p>
-            </div>
-            <div>
-              <p className="font-semibold text-slate-600">Diagnosis Utama:</p>
-              <p className="whitespace-pre-wrap mt-1 font-bold text-base uppercase">
-                {rekamMedis.diagnosis_utama || "-"}
-                {rekamMedis.icd10_utama &&
-                  ` (ICD-10: ${rekamMedis.icd10_utama})`}
-              </p>
-            </div>
-          </div>
-        </div>
 
-        <div className="border border-slate-300 rounded-lg overflow-hidden mb-8">
-          <div className="bg-slate-100 font-bold px-4 py-2 border-b border-slate-300">
-            C. Terapi & Tindak Lanjut
-          </div>
-          <div className="p-4 flex flex-col gap-4">
-            <div>
-              <p className="font-semibold text-slate-600">
-                Terapi / Pengobatan:
-              </p>
-              <p className="whitespace-pre-wrap mt-1">
-                {rekamMedis.terapi_pengobatan || "-"}
-              </p>
+            <div className="flex">
+              <div className="w-1/2 border-r border-black p-1">
+                <span className="block">Penanggung Pembayaran :</span>
+                <span className="font-bold uppercase">
+                  {rm.antrean?.cara_bayar || "UMUM"}
+                </span>
+              </div>
+              <div className="w-1/2 p-1">
+                <span className="block">Indikasi Rawat Inap :</span>
+                <span className="font-bold uppercase">
+                  {rm.diagnosis_utama || "-"}
+                </span>
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+          </div>
+
+          {/* TABEL KLINIS (ANAMNESIS & FISIK) */}
+          <div className="border-x border-b border-black flex">
+            <div className="w-1/4 border-r border-black p-1 font-semibold">
+              Ringkasan Riwayat Penyakit :
+            </div>
+            <div className="w-3/4 p-1 flex flex-col gap-2">
               <div>
-                <p className="font-semibold text-slate-600">Edukasi / Diet:</p>
-                <p className="whitespace-pre-wrap mt-1">
-                  {rekamMedis.edukasi || rekamMedis.rencana_diet || "-"}
+                <span className="font-bold">Ringkasan Penyakit Sekarang :</span>
+                <p className="whitespace-pre-wrap">
+                  {rm.riwayat_sekarang || "-"}
                 </p>
               </div>
               <div>
-                <p className="font-semibold text-slate-600">
-                  Tindak Lanjut (Cara Keluar):
-                </p>
-                <p className="whitespace-pre-wrap mt-1 font-bold uppercase">
-                  {rekamMedis.cara_keluar?.replace(/_/g, " ") || "-"}
+                <span className="font-bold">Ringkasan Penyakit Dahulu :</span>
+                <p className="whitespace-pre-wrap">
+                  {rm.riwayat_dahulu || "Tidak Ada"}
                 </p>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* TANDA TANGAN */}
-        <div className="flex justify-end mt-16 pt-8">
-          <div className="text-center w-64">
-            <p className="mb-16">Makassar, {tglPeriksa}</p>
-            <p className="font-bold underline uppercase">
-              {rekamMedis.dokter?.username || "Pemeriksa"}
-            </p>
-            <p className="text-sm text-slate-500">SIP: _________________</p>
+          <div className="border-x border-b border-black flex">
+            <div className="w-1/4 border-r border-black p-1 font-semibold">
+              Pemeriksaan Fisis :
+            </div>
+            <div className="w-3/4 p-1 whitespace-pre-wrap">
+              {rm.pemeriksaan_fisis ||
+                `KU: ${rm.keadaan_umum || "-"}\nHR: ${rm.nadi || "-"} kali/menit\nRR: ${rm.napas || "-"} kali/menit\nSuhu: ${rm.suhu || "-"} °C`}
+            </div>
+          </div>
+
+          <div className="border-x border-b border-black flex">
+            <div className="w-1/4 border-r border-black p-1 font-semibold">
+              Pemeriksaan Penunjang / Diagnostik Terpenting :
+            </div>
+            <div className="w-3/4 p-1 flex flex-col gap-1">
+              <span className="font-bold">Laboratorium :</span>
+              <p className="whitespace-pre-wrap">
+                {rm.laboratorium || "DR TERLAMPIR"}
+              </p>
+              <span className="font-bold mt-1">Radiologi :</span>
+              <p className="whitespace-pre-wrap">
+                {rm.radiologi || "FOTO THORAKS TERLAMPIR"}
+              </p>
+            </div>
+          </div>
+
+          {/* TABEL DIAGNOSIS & TINDAKAN */}
+          <table className="w-full border-x border-b border-black text-left mt-1">
+            <thead>
+              <tr className="border-b border-black font-bold">
+                <th className="p-1 border-r border-black w-[25%]">
+                  Diagnosis Utama
+                </th>
+                <th className="p-1 border-r border-black w-[10%]">ICD 10</th>
+                <th className="p-1 border-r border-black w-[35%]">
+                  Terapi / Pengobatan
+                </th>
+                <th className="p-1 w-[30%]">Tindakan/Prosedur</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-black align-top">
+                <td className="p-1 border-r border-black uppercase">
+                  {rm.diagnosis_utama || "-"}
+                </td>
+                <td className="p-1 border-r border-black">
+                  {rm.icd10_utama || "-"}
+                </td>
+                <td className="p-1 border-r border-black whitespace-pre-wrap uppercase">
+                  {rm.terapi_pengobatan || "-"}
+                </td>
+                <td className="p-1 whitespace-pre-wrap uppercase">
+                  {rm.tindakan_prosedur || "-"}
+                </td>
+              </tr>
+              <tr className="font-bold border-b border-black">
+                <td className="p-1 border-r border-black">
+                  Diagnosis Sekunder
+                </td>
+                <td className="p-1 border-r border-black">ICD 10</td>
+                <td colSpan={2} className="p-1 bg-slate-50"></td>
+              </tr>
+              <tr className="align-top border-b border-black">
+                <td className="p-1 border-r border-black uppercase">
+                  {rm.diagnosis_sekunder || "-"}
+                </td>
+                <td className="p-1 border-r border-black">
+                  {rm.icd10_sekunder || "-"}
+                </td>
+                <td colSpan={2} className="p-1"></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div className="border-x border-b border-black flex p-1">
+            <div className="w-1/4 font-semibold">Alergi (Reaksi Obat) :</div>
+            <div className="w-3/4 font-bold">{rm.alergi || "Tidak Ada"}</div>
+          </div>
+
+          {/* STATUS KELUAR */}
+          <div className="border-x border-b border-black flex">
+            <div className="w-1/2 border-r border-black p-1">
+              <span className="block mb-1 font-semibold">
+                Kondisi Waktu Keluar RS :
+              </span>
+              <div className="flex gap-4">
+                <span>{rm.kondisi_keluar === "Sembuh" ? "☑" : "☐"} SEMBUH</span>
+                <span>
+                  {rm.kondisi_keluar === "Belum Sembuh" ||
+                  rm.kondisi_keluar === "Belum Sembuh / Stabil"
+                    ? "☑"
+                    : "☐"}{" "}
+                  BELUM SEMBUH
+                </span>
+                <span>
+                  {rm.kondisi_keluar === "Membaik" ? "☑" : "☐"} MEMBAIK
+                </span>
+              </div>
+              <span className="block mt-2 font-bold">Kondisi Umum :</span>
+              <div className="grid grid-cols-2 gap-x-2 gap-y-1 mt-1">
+                <div>
+                  Tekanan Darah:{" "}
+                  <span className="font-bold">
+                    {rm.tensi_darah || "0/0"} mmHg
+                  </span>
+                </div>
+                <div>
+                  Nadi:{" "}
+                  <span className="font-bold">{rm.nadi || "0"} x/Menit</span>
+                </div>
+                <div>
+                  Napas:{" "}
+                  <span className="font-bold">{rm.napas || "0"} x/Menit</span>
+                </div>
+                <div>
+                  Suhu: <span className="font-bold">{rm.suhu || "0"} °C</span>
+                </div>
+              </div>
+              <div className="mt-1">
+                Kesadaran:{" "}
+                <span className="font-bold">
+                  {rm.kesadaran || "Sadar Baik / Alert"}
+                </span>
+              </div>
+            </div>
+            <div className="w-1/2 p-1">
+              <span className="block mb-1 font-semibold">Cara Keluar :</span>
+              <div className="flex flex-col">
+                <span>
+                  {rm.cara_keluar === "Diijinkan Pulang" ||
+                  rm.cara_keluar === "Diijinkan Pulang / Rawat Jalan"
+                    ? "☑"
+                    : "☐"}{" "}
+                  DIIJINKAN PULANG
+                </span>
+                <span>
+                  {rm.cara_keluar === "Pulang Paksa" ? "☑" : "☐"} PULANG ATAS
+                  PERMINTAAN SENDIRI
+                </span>
+                <span>
+                  {rm.cara_keluar === "Dirujuk" ||
+                  rm.cara_keluar === "Rujuk ke RS / Spesialis"
+                    ? "☑"
+                    : "☐"}{" "}
+                  DIRUJUK KE RS LAIN
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* TANDA TANGAN */}
+          <div className="flex justify-between mt-8 p-1">
+            <div className="text-center w-1/3 flex flex-col justify-end">
+              <p className="mb-16">Pasien/Keluarga</p>
+              <p>( ................................. )</p>
+            </div>
+            <div className="text-center w-1/3 flex flex-col justify-end">
+              <p className="font-bold uppercase">
+                MAKASSAR,{" "}
+                {new Date().toLocaleDateString("id-ID", {
+                  day: "2-digit",
+                  month: "long",
+                  year: "numeric",
+                })}
+              </p>
+              <p className="mb-16">Dokter Penanggung Jawab Pelayanan</p>
+              <p className="font-bold underline uppercase">
+                dr. {rm.dokter?.username || "Pemeriksa"}
+              </p>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
-// BUNGKUS DENGAN SUSPENSE
+// =========================================================================
+// PEMBUNGKUS SUSPENSE
+// =========================================================================
 export default function CetakRekamMedisPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center">
-          <Spinner size="lg" label="Memuat Format Cetak..." color="primary" />
+        <div className="min-h-screen flex flex-col items-center justify-center">
+          <Spinner size="lg" color="primary" />
         </div>
       }
     >
