@@ -77,6 +77,7 @@ function RekamMedisForm() {
     handleSubmit,
     setValue,
     watch,
+    getValues, // <--- TAMBAHKAN INI UNTUK MENARIK TEKS SECARA REAL-TIME
     formState: { errors },
   } = useForm<RekamMedisFormData>({
     resolver: yupResolver(rekamMedisSchema) as any,
@@ -524,7 +525,7 @@ function RekamMedisForm() {
                       </div>
                     </div>
 
-                    {/* Tindakan & Terapi dengan Quick-Add */}
+                    {/* Tindakan & Terapi dengan Quick-Add Multi Select */}
                     <div className="flex flex-col gap-4">
                       <h3 className="font-semibold text-slate-700 border-b pb-2">
                         Terapi & Tindakan
@@ -532,21 +533,26 @@ function RekamMedisForm() {
 
                       {/* DROPDOWN SAKTI QUICK-ADD OBAT */}
                       <Select
-                        label="Tambahkan Obat Cepat (Dari Database)"
+                        label="Tambahkan Obat Cepat (Bisa dipilih berkali-kali)"
                         placeholder="Klik untuk memilih obat..."
                         variant="bordered"
                         color="success"
                         className="mb-1"
-                        selectedKeys={[]} // Selalu kosong agar dokter bisa pilih obat yang sama berulang kali jika perlu
+                        selectedKeys={[]} // KUNCI UTAMA: Selalu dikosongkan agar dokter bisa klik obat yang sama/berbeda terus-menerus
                         onSelectionChange={(keys) => {
                           const obatTerpilih = Array.from(keys)[0] as string;
                           if (obatTerpilih) {
+                            // 1. Ambil teks apa pun yang saat ini sedang ada di dalam Textarea
                             const teksSekarang =
-                              watch("terapi_pengobatan") || "";
-                            // Sisipkan nama obat, lalu beri spasi agar dokter tinggal ketik dosisnya
+                              getValues("terapi_pengobatan") || "";
+
+                            // 2. Jika textarea sudah ada isinya, beri Enter (\n) lalu tambahkan obat baru.
+                            // Jika masih kosong, langsung tulis obatnya.
                             const teksBaru = teksSekarang
                               ? `${teksSekarang}\n- ${obatTerpilih} `
                               : `- ${obatTerpilih} `;
+
+                            // 3. Tembakkan teks gabungan tersebut kembali ke dalam Textarea
                             setValue("terapi_pengobatan", teksBaru, {
                               shouldValidate: true,
                             });
@@ -557,15 +563,23 @@ function RekamMedisForm() {
                           <SelectItem
                             key={obat.nama_obat}
                             value={obat.nama_obat}
+                            textValue={obat.nama_obat}
                           >
-                            {obat.nama_obat} ({obat.satuan}) - Stok: {obat.stok}
+                            <div className="flex justify-between items-center w-full">
+                              <span className="font-medium">
+                                {obat.nama_obat} ({obat.satuan})
+                              </span>
+                              <span className="text-xs text-slate-400">
+                                Stok: {obat.stok}
+                              </span>
+                            </div>
                           </SelectItem>
                         ))}
                       </Select>
 
                       <Textarea
                         {...register("terapi_pengobatan")}
-                        label="Terapi / Pengobatan"
+                        label="Terapi / Pengobatan (Otomatis & Manual)"
                         placeholder="Contoh: Ringer Laktat, Paracetamol..."
                         minRows={4}
                         variant="bordered"
