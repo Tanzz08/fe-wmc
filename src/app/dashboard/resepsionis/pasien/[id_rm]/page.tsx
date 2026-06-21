@@ -34,7 +34,11 @@ export default function DetailPasienPage() {
   const id_rm = params.id_rm as string;
 
   // 1. Tarik data menggunakan React Query (Pengganti SWR)
-  const { data: p, error, isLoading } = useQuery({
+  const {
+    data: p,
+    error,
+    isLoading,
+  } = useQuery({
     queryKey: ["pasienDetail", id_rm],
     queryFn: async () => {
       const response = await api.get(`/pasien/${id_rm}`);
@@ -107,14 +111,7 @@ export default function DetailPasienPage() {
               </p>
               <p className="text-lg font-bold text-slate-800">{p.nama}</p>
             </div>
-            <div>
-              <p className="text-xs text-slate-400 font-semibold uppercase">
-                Nomor Induk Kependudukan (NIK)
-              </p>
-              <p className="font-mono text-slate-700 bg-slate-100 px-2 py-1 rounded inline-block mt-1 font-medium">
-                {p.nik}
-              </p>
-            </div>
+
             <div className="flex gap-8">
               <div>
                 <p className="text-xs text-slate-400 font-semibold uppercase mb-1">
@@ -123,7 +120,10 @@ export default function DetailPasienPage() {
                 <Chip
                   size="sm"
                   color={
-                    p.jenis_kelamin === "Laki-laki" || p.jenis_kelamin === "Laki-Laki" ? "primary" : "secondary"
+                    p.jenis_kelamin === "Laki-laki" ||
+                    p.jenis_kelamin === "Laki-Laki"
+                      ? "primary"
+                      : "secondary"
                   }
                   variant="flat"
                 >
@@ -241,7 +241,7 @@ export default function DetailPasienPage() {
                     startContent={<Eye size={16} />}
                     onPress={() =>
                       router.push(
-                        `/dashboard/resepsionis/rekam-medis/${rm.nopen}`
+                        `/dashboard/resepsionis/rekam-medis/${rm.nopen}`,
                       )
                     }
                   >

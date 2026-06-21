@@ -24,18 +24,18 @@ export default function FormPemeriksaanDokter() {
   const { nopen } = useParams();
   const router = useRouter();
 
-  // State Form disesuaikan 100% dengan kebutuhan req.body di backend-mu
+  // State Form
   const [formData, setFormData] = useState({
-    keadaan_umum: "",
-    kesadaran: "",
+    keadaan_umum: "BAIK", // Diubah jadi default BAIK
+    kesadaran: "COMPOS_MENTIS", // Diubah jadi default Sadar Penuh
     tensi_darah: "",
     nadi: "",
     napas: "",
     suhu: "",
-    skala_nyeri: "",
+    skala_nyeri: "0", // Diubah jadi string angka
     riwayat_sekarang: "",
     riwayat_dahulu: "",
-    alergi: "",
+    alergi: "TIDAK_ADA", // Default tidak ada
     pemeriksaan_fisis: "",
     laboratorium: "",
     radiologi: "",
@@ -43,7 +43,7 @@ export default function FormPemeriksaanDokter() {
     icd10_utama: "",
     diagnosis_sekunder: "",
     terapi_pengobatan: "",
-    tindakan_prosedur: "", // Terapi diubah jadi string biasa
+    tindakan_prosedur: "",
     edukasi: "",
     rencana_diet: "",
     kondisi_keluar: "MEMBAIK",
@@ -68,7 +68,6 @@ export default function FormPemeriksaanDokter() {
         id_rm: antrean?.id_rm,
         ...formData,
       };
-      // Langsung tembak ke endpoint buatanmu
       await api.post(`/rekam-medis`, payload);
     },
     onSuccess: () => {
@@ -106,7 +105,7 @@ export default function FormPemeriksaanDokter() {
         variant="underlined"
         classNames={{ cursor: "w-full" }}
       >
-        {/* TAB 1 */}
+        {/* TAB 1: ANAMNESIS & VITAL */}
         <Tab
           key="subjective"
           title={
@@ -117,6 +116,7 @@ export default function FormPemeriksaanDokter() {
         >
           <Card className="shadow-sm border border-slate-200 mt-2">
             <CardBody className="p-6 gap-6">
+              {/* TANDA VITAL (Angka) */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Input
                   label="Tensi (mmHg)"
@@ -143,28 +143,111 @@ export default function FormPemeriksaanDokter() {
                   onChange={(e) => handleChange("napas", e.target.value)}
                 />
               </div>
+
               <Divider />
-              <Textarea
-                label="Keluhan Utama / Riwayat Sekarang"
-                minRows={3}
-                value={formData.riwayat_sekarang}
-                onChange={(e) =>
-                  handleChange("riwayat_sekarang", e.target.value)
-                }
-              />
-              <Textarea
-                label="Pemeriksaan Fisis (Objektif)"
-                minRows={3}
-                value={formData.pemeriksaan_fisis}
-                onChange={(e) =>
-                  handleChange("pemeriksaan_fisis", e.target.value)
-                }
-              />
+
+              {/* KONDISI UMUM (Baru ditambahkan dropdown) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Select
+                  label="Keadaan Umum"
+                  selectedKeys={[formData.keadaan_umum]}
+                  onChange={(e) => handleChange("keadaan_umum", e.target.value)}
+                >
+                  <SelectItem key="BAIK" value="BAIK">
+                    Tampak Baik
+                  </SelectItem>
+                  <SelectItem key="SEDANG" value="SEDANG">
+                    Tampak Sakit Sedang
+                  </SelectItem>
+                  <SelectItem key="BERAT" value="BERAT">
+                    Tampak Sakit Berat
+                  </SelectItem>
+                </Select>
+
+                <Select
+                  label="Tingkat Kesadaran"
+                  selectedKeys={[formData.kesadaran]}
+                  onChange={(e) => handleChange("kesadaran", e.target.value)}
+                >
+                  <SelectItem key="COMPOS_MENTIS" value="COMPOS_MENTIS">
+                    Compos Mentis (Sadar Penuh)
+                  </SelectItem>
+                  <SelectItem key="APATIS" value="APATIS">
+                    Apatis (Acuh tak acuh)
+                  </SelectItem>
+                  <SelectItem key="SOMNOLEN" value="SOMNOLEN">
+                    Somnolen (Mengantuk)
+                  </SelectItem>
+                  <SelectItem key="SOPOR" value="SOPOR">
+                    Sopor (Tidur nyenyak)
+                  </SelectItem>
+                  <SelectItem key="KOMA" value="KOMA">
+                    Koma
+                  </SelectItem>
+                </Select>
+
+                <Select
+                  label="Skala Nyeri (0-10)"
+                  selectedKeys={[formData.skala_nyeri]}
+                  onChange={(e) => handleChange("skala_nyeri", e.target.value)}
+                >
+                  <SelectItem key="0" value="0">
+                    0 - Tidak Nyeri
+                  </SelectItem>
+                  <SelectItem key="1" value="1">
+                    1-3 - Nyeri Ringan
+                  </SelectItem>
+                  <SelectItem key="4" value="4">
+                    4-6 - Nyeri Sedang
+                  </SelectItem>
+                  <SelectItem key="7" value="7">
+                    7-10 - Nyeri Berat
+                  </SelectItem>
+                </Select>
+              </div>
+
+              <Divider />
+
+              {/* KELUHAN & ALERGI */}
+              <div className="grid grid-cols-1 gap-4">
+                <Select
+                  label="Riwayat Alergi"
+                  selectedKeys={[formData.alergi]}
+                  onChange={(e) => handleChange("alergi", e.target.value)}
+                >
+                  <SelectItem key="TIDAK_ADA" value="TIDAK_ADA">
+                    Tidak Ada Alergi (Disangkal)
+                  </SelectItem>
+                  <SelectItem key="OBAT" value="OBAT">
+                    Alergi Obat (Sebutkan di Pemeriksaan)
+                  </SelectItem>
+                  <SelectItem key="MAKANAN" value="MAKANAN">
+                    Alergi Makanan / Debu / Lainnya
+                  </SelectItem>
+                </Select>
+
+                <Textarea
+                  label="Keluhan Utama / Riwayat Sekarang"
+                  minRows={3}
+                  value={formData.riwayat_sekarang}
+                  onChange={(e) =>
+                    handleChange("riwayat_sekarang", e.target.value)
+                  }
+                />
+                <Textarea
+                  label="Pemeriksaan Fisis (Objektif)"
+                  minRows={3}
+                  value={formData.pemeriksaan_fisis}
+                  onChange={(e) =>
+                    handleChange("pemeriksaan_fisis", e.target.value)
+                  }
+                />
+              </div>
             </CardBody>
           </Card>
         </Tab>
 
-        {/* TAB 2: MANUAL RESEP */}
+        {/* TAB 2: MANUAL RESEP (Tidak ada dropdown di sini karena butuh ketik bebas) */}
         <Tab
           key="assessment"
           title={
@@ -186,7 +269,7 @@ export default function FormPemeriksaanDokter() {
                   }
                 />
                 <Input
-                  label="Kode ICD-10"
+                  label="Kode ICD-10 (Opsional)"
                   placeholder="Contoh: J06.9"
                   value={formData.icd10_utama}
                   onChange={(e) => handleChange("icd10_utama", e.target.value)}
@@ -205,7 +288,8 @@ export default function FormPemeriksaanDokter() {
                 description="Teks ini akan dienkripsi dan diteruskan langsung ke layar Apoteker."
               />
               <Textarea
-                label="Tindakan / Prosedur"
+                label="Tindakan / Prosedur Khusus"
+                placeholder="Contoh: Rawat Luka, Pemasangan Infus..."
                 minRows={2}
                 value={formData.tindakan_prosedur}
                 onChange={(e) =>
@@ -216,7 +300,7 @@ export default function FormPemeriksaanDokter() {
           </Card>
         </Tab>
 
-        {/* TAB 3 */}
+        {/* TAB 3: EDUKASI & KELUAR */}
         <Tab
           key="plan"
           title={
@@ -229,7 +313,7 @@ export default function FormPemeriksaanDokter() {
             <CardBody className="p-6 gap-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Select
-                  label="Kondisi Keluar"
+                  label="Kondisi Waktu Keluar Poli"
                   selectedKeys={[formData.kondisi_keluar]}
                   onChange={(e) =>
                     handleChange("kondisi_keluar", e.target.value)
@@ -242,24 +326,57 @@ export default function FormPemeriksaanDokter() {
                     Membaik
                   </SelectItem>
                   <SelectItem key="BELUM_SEMBUH" value="BELUM_SEMBUH">
-                    Belum Sembuh
+                    Belum Sembuh / Stabil
+                  </SelectItem>
+                  <SelectItem key="BURUK" value="BURUK">
+                    Memburuk / Kritis
                   </SelectItem>
                 </Select>
                 <Select
-                  label="Cara Keluar"
+                  label="Cara / Tindak Lanjut"
                   selectedKeys={[formData.cara_keluar]}
                   onChange={(e) => handleChange("cara_keluar", e.target.value)}
                 >
                   <SelectItem key="DIIJINKAN_PULANG" value="DIIJINKAN_PULANG">
-                    Diijinkan Pulang / Kontrol
+                    Diijinkan Pulang / Rawat Jalan
+                  </SelectItem>
+                  <SelectItem key="KONTROL" value="KONTROL">
+                    Disarankan Kontrol Ulang
                   </SelectItem>
                   <SelectItem key="DIRUJUK" value="DIRUJUK">
-                    Dirujuk
+                    Rujuk ke RS / Spesialis
+                  </SelectItem>
+                  <SelectItem key="RAWAT_INAP" value="RAWAT_INAP">
+                    Indikasi Rawat Inap (Jika ada)
                   </SelectItem>
                 </Select>
               </div>
+
+              {/* Tambahan Rencana Diet (Dropdown baru) */}
+              <Select
+                label="Rencana Diet / Pola Makan"
+                selectedKeys={
+                  formData.rencana_diet ? [formData.rencana_diet] : []
+                }
+                onChange={(e) => handleChange("rencana_diet", e.target.value)}
+              >
+                <SelectItem key="BEBAS" value="BEBAS">
+                  Bebas / Biasa
+                </SelectItem>
+                <SelectItem key="RENDAH_GARAM" value="RENDAH_GARAM">
+                  Rendah Garam (Hipertensi)
+                </SelectItem>
+                <SelectItem key="RENDAH_GULA" value="RENDAH_GULA">
+                  Rendah Gula (Diabetes)
+                </SelectItem>
+                <SelectItem key="LUNAK" value="LUNAK">
+                  Makanan Lunak / Cair
+                </SelectItem>
+              </Select>
+
               <Textarea
-                label="Edukasi / Follow Up"
+                label="Edukasi Tambahan"
+                placeholder="Tuliskan saran khusus untuk pasien (Misal: Banyak istirahat, hindari makanan pedas)..."
                 minRows={3}
                 value={formData.edukasi}
                 onChange={(e) => handleChange("edukasi", e.target.value)}
@@ -275,7 +392,7 @@ export default function FormPemeriksaanDokter() {
         </Button>
         <Button
           color="primary"
-          className="font-bold px-8"
+          className="font-bold px-8 bg-klinik-blue shadow-md"
           size="lg"
           startContent={<Save size={20} />}
           isLoading={simpanPemeriksaanMutation.isPending}
