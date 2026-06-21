@@ -37,6 +37,7 @@ import {
   Printer,
 } from "lucide-react";
 import api from "@/lib/axios";
+import { useRouter } from "next/navigation";
 
 // =========================================================================
 // 1. TIPE DATA
@@ -73,6 +74,8 @@ export default function ArsipRekamMedisPage() {
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRm, setSelectedRm] = useState<string | null>(null);
+
+  const router = useRouter();
 
   // =========================================================================
   // 2. FETCH DATA DAFTAR PASIEN
@@ -374,9 +377,8 @@ export default function ArsipRekamMedisPage() {
                               className="bg-klinik-blue font-semibold"
                               startContent={<Printer size={16} />}
                               onPress={() =>
-                                window.open(
-                                  `/dashboard/admin/arsip-rm/cetak?id_rm=${detailPasien.id_rm}&nopen=${rm.nopen}`,
-                                  "_blank",
+                                router.push(
+                                  `/dashboard/dokter/rekam-medis/${rm.nopen}/cetak`,
                                 )
                               }
                             >
