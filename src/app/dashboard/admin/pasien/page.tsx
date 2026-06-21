@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useForm, SubmitHandler } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
+import * as yup from "yup";
 import {
   Table,
   TableHeader,
@@ -17,326 +20,452 @@ import {
   ModalBody,
   ModalFooter,
   useDisclosure,
-  Spinner,
   Select,
   SelectItem,
+  Textarea,
+  Card,
+  CardBody,
   Chip,
 } from "@nextui-org/react";
-import { Users, Edit2, Trash2, ShieldAlert, Plus } from "lucide-react";
+import { Plus, Search, UserPlus, Eye, Edit, Trash2 } from "lucide-react";
 import api from "@/lib/axios";
-import toast from "react-hot-toast";
+import { useRouter } from "next/navigation";
 
-// Sesuaikan dengan skema Prisma
+// =========================================================================
+// 1. TIPE DATA & SKEMA VALIDASI YUP
+// =========================================================================
 interface Pasien {
   id_rm: string;
   nama: string;
-  nik: string;
-  tanggal_lahir: string;
   jenis_kelamin: string;
-  alamat: string;
+  tanggal_lahir: string;
   no_telepon: string;
-  is_active: boolean;
+  alamat: string;
 }
 
-export default function AdminPasienPage() {
+type ModalMode = "create" | "edit" | "view";
+
+const pasienSchema = yup.object().shape({
+  id_rm: yup.string().optional(),
+  nama: yup.string().required("Nama lengkap wajib diisi"),
+  jenis_kelamin: yup.string().required("Pilih jenis kelamin"),
+  tanggal_lahir: yup.string().required("Tanggal lahir wajib diisi"),
+  no_telepon: yup.string().required("Nomor telepon wajib diisi"),
+  alamat: yup.string().required("Alamat wajib diisi"),
+});
+
+type PasienFormData = yup.InferType<typeof pasienSchema>;
+
+export default function PasienPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
-  const { isOpen, onOpen, onOpenChange } = useDisclosure();
+  const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 
-  const [isEdit, setIsEdit] = useState(false);
-  const [formData, setFormData] = useState({
-    id_rm: "",
-    nama: "",
-    nik: "",
-    tanggal_lahir: "",
-    jenis_kelamin: "",
-    alamat: "",
-    no_telepon: "",
+  const [searchQuery, setSearchQuery] = useState("");
+  const [modalMode, setModalMode] = useState<ModalMode>("create");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<PasienFormData>({
+    resolver: yupResolver(pasienSchema) as any,
   });
 
-  // 1. Fetch Data Pasien
+  // =========================================================================
+  // 2. REACT QUERY (GET DATA PASIEN)
+  // =========================================================================
   const { data: listPasien = [], isLoading } = useQuery<Pasien[]>({
-    queryKey: ["adminMasterPasien"],
+    queryKey: ["pasienList"],
     queryFn: async () => {
-      const res = await api.get("/pasien");
-      return res.data?.data || [];
+      try {
+        const response = await api.get("/pasien");
+        const fetchedData = response.data?.data || response.data;
+        return Array.isArray(fetchedData) ? fetchedData : [];
+      } catch (error) {
+        console.error("Gagal menarik data pasien", error);
+        return [];
+      }
     },
   });
 
-  // 2. Mutasi Simpan (Add/Edit)
-  const saveMutation = useMutation({
-    mutationFn: async (data: any) => {
-      if (isEdit) return await api.put(`/pasien/${data.id_rm}`, data);
-      return await api.post("/pasien", data);
-    },
-    onSuccess: () => {
-      toast.success(
-        isEdit ? "Data pasien diperbarui!" : "Pasien baru ditambahkan!",
-      );
-      queryClient.invalidateQueries({ queryKey: ["adminMasterPasien"] });
-      onOpenChange();
-    },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.message || "Terjadi kesalahan.");
-    },
-  });
+  const filteredPasien = listPasien.filter(
+    (p) =>
+      p.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.id_rm && p.id_rm.toLowerCase().includes(searchQuery.toLowerCase())),
+  );
 
-  // 3. Mutasi Soft Delete (Nonaktifkan)
-  const deleteMutation = useMutation({
-    mutationFn: async (id_rm: string) => await api.delete(`/pasien/${id_rm}`),
-    onSuccess: () => {
-      toast.success("Pasien berhasil dinonaktifkan (Soft Delete).");
-      queryClient.invalidateQueries({ queryKey: ["adminMasterPasien"] });
-    },
-    onError: () => toast.error("Gagal menonaktifkan data pasien."),
-  });
-
-  const handleOpenAdd = () => {
-    setIsEdit(false);
-    setFormData({
+  // =========================================================================
+  // 3. HANDLER MODAL (CREATE & EDIT)
+  // =========================================================================
+  const handleOpenCreate = () => {
+    setModalMode("create");
+    setErrorMsg("");
+    reset({
       id_rm: "",
       nama: "",
-      nik: "",
-      tanggal_lahir: "",
       jenis_kelamin: "",
-      alamat: "",
+      tanggal_lahir: "",
       no_telepon: "",
+      alamat: "",
     });
     onOpen();
   };
 
-  const handleOpenEdit = (item: Pasien) => {
-    setIsEdit(true);
-    setFormData({
-      id_rm: item.id_rm,
-      nama: item.nama,
-      nik: item.nik,
-      tanggal_lahir: new Date(item.tanggal_lahir).toISOString().split("T")[0], // Format ke YYYY-MM-DD untuk input date
-      jenis_kelamin: item.jenis_kelamin,
-      alamat: item.alamat,
-      no_telepon: item.no_telepon,
-    });
+  const handleOpenAction = async (id_rm: string, mode: "edit" | "view") => {
+    setModalMode(mode);
+    setErrorMsg("");
     onOpen();
+
+    try {
+      const response = await api.get(`/pasien/${id_rm}`);
+      const dataPasien = response.data.data;
+      const formattedDate = new Date(dataPasien.tanggal_lahir)
+        .toISOString()
+        .split("T")[0];
+
+      reset({
+        id_rm: dataPasien.id_rm,
+        nama: dataPasien.nama,
+        jenis_kelamin: dataPasien.jenis_kelamin,
+        tanggal_lahir: formattedDate,
+        no_telepon: dataPasien.no_telepon,
+        alamat: dataPasien.alamat,
+      });
+    } catch (err) {
+      setErrorMsg("Gagal mengambil detail pasien dari server.");
+    }
   };
 
+  // =========================================================================
+  // 4. REACT QUERY MUTATIONS
+  // =========================================================================
+  const saveMutation = useMutation({
+    mutationFn: async (data: PasienFormData) => {
+      if (modalMode === "create") {
+        return await api.post("/pasien", data);
+      } else {
+        return await api.put(`/pasien/${data.id_rm}`, data);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pasienList"] });
+      onClose();
+    },
+    onError: (error: any) => {
+      setErrorMsg(
+        error.response?.data?.message ||
+          "Terjadi kesalahan sistem saat menyimpan data.",
+      );
+    },
+  });
+
+  const onSubmitForm: SubmitHandler<PasienFormData> = (data) => {
+    if (modalMode === "view") return onClose();
+    setErrorMsg("");
+    saveMutation.mutate(data);
+  };
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id_rm: string) => {
+      return await api.delete(`/pasien/${id_rm}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pasienList"] });
+    },
+    onError: () => {
+      alert("Gagal menghapus data pasien.");
+    },
+  });
+
+  const handleDelete = (id_rm: string, namaPasien: string) => {
+    const isConfirm = window.confirm(
+      `Apakah Anda yakin ingin menghapus data pasien: ${namaPasien}?`,
+    );
+    if (isConfirm) {
+      deleteMutation.mutate(id_rm);
+    }
+  };
+
+  // =========================================================================
+  // 5. RENDER UI
+  // =========================================================================
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-800">
-            <Users className="text-klinik-blue" /> Master Data Pasien
+          <h1 className="text-2xl font-bold text-slate-800">
+            Master Data Pasien
           </h1>
           <p className="text-sm text-slate-500">
-            Kelola data demografi pasien, koreksi kesalahan input, dan
-            nonaktifkan data (Soft Delete).
+            Kelola informasi rekam medis dan identitas pasien klinik.
           </p>
         </div>
         <Button
           color="primary"
-          className="bg-klinik-blue shadow-md font-bold"
-          onPress={handleOpenAdd}
+          className="bg-klinik-blue font-semibold"
           startContent={<Plus size={18} />}
+          onPress={handleOpenCreate}
         >
-          Tambah Pasien
+          Pasien Baru
         </Button>
       </div>
 
-      <Table
-        aria-label="Tabel Master Pasien"
-        className="shadow-sm border border-slate-200"
-      >
-        <TableHeader>
-          <TableColumn>NO. RM</TableColumn>
-          <TableColumn>NAMA PASIEN</TableColumn>
-          <TableColumn>NIK & KONTAK</TableColumn>
-          <TableColumn>L/P</TableColumn>
-          <TableColumn>STATUS</TableColumn>
-          <TableColumn align="center">AKSI</TableColumn>
-        </TableHeader>
-        <TableBody
-          emptyContent={isLoading ? <Spinner /> : "Belum ada data pasien."}
-          items={listPasien}
+      <Card className="shadow-sm">
+        <CardBody>
+          <Input
+            isClearable
+            className="w-full sm:max-w-md"
+            placeholder="Cari berdasarkan Nama atau ID RM..."
+            startContent={<Search className="text-default-300" size={18} />}
+            value={searchQuery}
+            onValueChange={setSearchQuery}
+            variant="bordered"
+          />
+        </CardBody>
+      </Card>
+
+      <div className="overflow-x-auto w-full">
+        <Table
+          aria-label="Tabel Master Data Pasien"
+          className="shadow-sm min-w-max"
         >
-          {(item) => (
-            <TableRow key={item.id_rm}>
-              <TableCell className="font-mono font-bold text-klinik-blue">
-                {item.id_rm}
-              </TableCell>
-              <TableCell className="font-semibold uppercase">
-                {item.nama}
-              </TableCell>
-              <TableCell>
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">{item.nik}</span>
-                  <span className="text-xs text-slate-500">
-                    {item.no_telepon}
-                  </span>
-                </div>
-              </TableCell>
-              <TableCell>
-                {item.jenis_kelamin === "Laki-laki" ? "L" : "P"}
-              </TableCell>
-              <TableCell>
-                {item.is_active ? (
-                  <Chip color="success" variant="flat" size="sm">
-                    Aktif
-                  </Chip>
-                ) : (
+          <TableHeader>
+            <TableColumn>ID RM</TableColumn>
+            <TableColumn>NAMA PASIEN</TableColumn>
+            <TableColumn>JENIS KELAMIN</TableColumn>
+            <TableColumn>TANGGAL LAHIR</TableColumn>
+            <TableColumn>NO. TELEPON</TableColumn>
+            <TableColumn>ALAMAT</TableColumn>
+            <TableColumn align="center">AKSI</TableColumn>
+          </TableHeader>
+          <TableBody
+            items={filteredPasien}
+            isLoading={isLoading}
+            loadingContent={
+              <div className="font-semibold text-klinik-blue">
+                Memuat Data...
+              </div>
+            }
+            emptyContent={isLoading ? " " : "Tidak ada data."}
+          >
+            {(pasien) => (
+              <TableRow key={pasien.id_rm}>
+                <TableCell>
                   <Chip
-                    color="danger"
-                    variant="flat"
                     size="sm"
-                    startContent={<ShieldAlert size={12} />}
+                    color="primary"
+                    variant="flat"
+                    className="font-semibold"
                   >
-                    Nonaktif
+                    {pasien.id_rm}
                   </Chip>
-                )}
-              </TableCell>
-              <TableCell>
-                <div className="flex gap-2">
-                  <Button
-                    isIconOnly
-                    size="sm"
-                    color="warning"
-                    variant="flat"
-                    onPress={() => handleOpenEdit(item)}
-                  >
-                    <Edit2 size={16} />
-                  </Button>
-                  {/* Sembunyikan tombol hapus jika sudah nonaktif */}
-                  {item.is_active && (
+                </TableCell>
+                <TableCell className="font-medium text-slate-700 whitespace-nowrap">
+                  {pasien.nama}
+                </TableCell>
+                <TableCell>{pasien.jenis_kelamin}</TableCell>
+                <TableCell className="whitespace-nowrap">
+                  {new Date(pasien.tanggal_lahir).toLocaleDateString("id-ID", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </TableCell>
+                <TableCell className="font-mono text-sm">
+                  {pasien.no_telepon}
+                </TableCell>
+                <TableCell>
+                  <div className="max-w-[250px] truncate" title={pasien.alamat}>
+                    {pasien.alamat}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
                     <Button
                       isIconOnly
                       size="sm"
-                      color="danger"
-                      variant="flat"
-                      isLoading={deleteMutation.isPending}
-                      onPress={() => {
-                        if (
-                          confirm(
-                            `Yakin ingin menonaktifkan pasien ${item.nama}?`,
-                          )
+                      variant="light"
+                      color="primary"
+                      onPress={() =>
+                        router.push(
+                          `/dashboard/resepsionis/pasien/${pasien.id_rm}`,
                         )
-                          deleteMutation.mutate(item.id_rm);
-                      }}
+                      }
                     >
-                      <Trash2 size={16} />
+                      <Eye size={18} />
                     </Button>
-                  )}
-                </div>
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+                    <Button
+                      isIconOnly
+                      size="sm"
+                      variant="light"
+                      color="warning"
+                      onPress={() => handleOpenAction(pasien.id_rm, "edit")}
+                    >
+                      <Edit size={18} />
+                    </Button>
+                    <Button
+                      isIconOnly
+                      size="sm"
+                      variant="light"
+                      color="danger"
+                      isLoading={
+                        deleteMutation.isPending &&
+                        deleteMutation.variables === pasien.id_rm
+                      }
+                      onPress={() => handleDelete(pasien.id_rm, pasien.nama)}
+                    >
+                      <Trash2 size={18} />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
-      {/* MODAL FORM PASIEN */}
-      <Modal isOpen={isOpen} onOpenChange={onOpenChange} size="2xl">
+      <Modal
+        isOpen={isOpen}
+        onOpenChange={onOpenChange}
+        placement="center"
+        size="2xl"
+        scrollBehavior="inside"
+      >
         <ModalContent>
           {(onClose) => (
-            <>
-              <ModalHeader className="flex flex-col gap-1 border-b">
-                {isEdit ? "Edit Data Pasien" : "Tambah Data Pasien"}
-                {isEdit && (
-                  <span className="text-xs text-slate-500 font-normal">
-                    Pastikan NIK, Alamat, dan Telepon terisi dengan benar (akan
-                    otomatis dienkripsi AES oleh sistem).
+            <form onSubmit={handleSubmit(onSubmitForm)}>
+              <ModalHeader className="flex items-center gap-2 border-b">
+                <UserPlus className="text-klinik-blue" size={24} />
+                <div className="flex flex-col">
+                  <span className="text-lg font-bold">
+                    {modalMode === "create"
+                      ? "Registrasi Pasien Baru"
+                      : modalMode === "edit"
+                        ? "Edit Data Pasien"
+                        : "Detail Pasien"}
                   </span>
-                )}
+                  <p className="text-xs text-slate-400 font-normal">
+                    {modalMode === "view"
+                      ? "Mode Hanya Lihat"
+                      : "Data sensitif akan otomatis dienkripsi dengan AES-256."}
+                  </p>
+                </div>
               </ModalHeader>
-              <ModalBody className="py-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* ID RM disembunyikan saat tambah, hanya read-only saat edit */}
-                {isEdit && (
+
+              <ModalBody className="py-6 flex flex-col gap-4">
+                {errorMsg && (
+                  <div className="p-3 bg-red-100 text-red-700 text-sm rounded-lg text-center font-medium">
+                    {errorMsg}
+                  </div>
+                )}
+
+                {modalMode !== "create" && watch("id_rm") && (
                   <Input
-                    label="No. Rekam Medis"
+                    label="ID Rekam Medis"
                     variant="flat"
-                    value={formData.id_rm}
+                    value={watch("id_rm")}
                     isReadOnly
-                    className="md:col-span-2"
+                    color="primary"
                   />
                 )}
 
                 <Input
+                  {...register("nama")}
+                  isRequired
                   label="Nama Lengkap"
                   variant="bordered"
-                  value={formData.nama}
-                  onChange={(e) =>
-                    setFormData({ ...formData, nama: e.target.value })
-                  }
-                  isRequired
-                />
-                <Input
-                  label="NIK"
-                  variant="bordered"
-                  value={formData.nik}
-                  onChange={(e) =>
-                    setFormData({ ...formData, nik: e.target.value })
-                  }
-                  isRequired
+                  isReadOnly={modalMode === "view"}
+                  isInvalid={!!errors.nama}
+                  errorMessage={errors.nama?.message}
                 />
 
-                <Input
-                  label="Tanggal Lahir"
-                  type="date"
-                  variant="bordered"
-                  value={formData.tanggal_lahir}
-                  onChange={(e) =>
-                    setFormData({ ...formData, tanggal_lahir: e.target.value })
-                  }
-                  isRequired
-                />
-                <Select
-                  label="Jenis Kelamin"
-                  variant="bordered"
-                  selectedKeys={
-                    formData.jenis_kelamin ? [formData.jenis_kelamin] : []
-                  }
-                  onChange={(e) =>
-                    setFormData({ ...formData, jenis_kelamin: e.target.value })
-                  }
-                  isRequired
-                >
-                  <SelectItem key="Laki-laki" value="Laki-laki">
-                    Laki-laki
-                  </SelectItem>
-                  <SelectItem key="Perempuan" value="Perempuan">
-                    Perempuan
-                  </SelectItem>
-                </Select>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {modalMode === "view" ? (
+                    <Input
+                      label="Jenis Kelamin"
+                      variant="bordered"
+                      value={watch("jenis_kelamin")}
+                      isReadOnly
+                    />
+                  ) : (
+                    <Select
+                      {...register("jenis_kelamin")}
+                      isRequired
+                      label="Jenis Kelamin"
+                      variant="bordered"
+                      selectedKeys={
+                        watch("jenis_kelamin") ? [watch("jenis_kelamin")] : []
+                      }
+                      onSelectionChange={(keys) =>
+                        setValue("jenis_kelamin", Array.from(keys)[0] as string)
+                      }
+                      isInvalid={!!errors.jenis_kelamin}
+                      errorMessage={errors.jenis_kelamin?.message}
+                    >
+                      <SelectItem key="Laki-laki" value="Laki-laki">
+                        Laki-laki
+                      </SelectItem>
+                      <SelectItem key="Perempuan" value="Perempuan">
+                        Perempuan
+                      </SelectItem>
+                    </Select>
+                  )}
 
-                <Input
-                  label="No. Telepon / WA"
-                  variant="bordered"
-                  value={formData.no_telepon}
-                  onChange={(e) =>
-                    setFormData({ ...formData, no_telepon: e.target.value })
-                  }
-                  isRequired
-                />
-                <Input
-                  label="Alamat Lengkap"
-                  variant="bordered"
-                  value={formData.alamat}
-                  onChange={(e) =>
-                    setFormData({ ...formData, alamat: e.target.value })
-                  }
-                  className="md:col-span-2"
-                  isRequired
-                />
+                  <Input
+                    {...register("tanggal_lahir")}
+                    isRequired
+                    label="Tanggal Lahir"
+                    type="date"
+                    variant="bordered"
+                    isReadOnly={modalMode === "view"}
+                    isInvalid={!!errors.tanggal_lahir}
+                    errorMessage={errors.tanggal_lahir?.message}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    {...register("no_telepon")}
+                    isRequired
+                    label="Nomor Telepon / WA"
+                    variant="bordered"
+                    isReadOnly={modalMode === "view"}
+                    isInvalid={!!errors.no_telepon}
+                    errorMessage={errors.no_telepon?.message}
+                  />
+                  <Textarea
+                    {...register("alamat")}
+                    isRequired
+                    label="Alamat Lengkap"
+                    variant="bordered"
+                    isReadOnly={modalMode === "view"}
+                    isInvalid={!!errors.alamat}
+                    errorMessage={errors.alamat?.message}
+                  />
+                </div>
               </ModalBody>
+
               <ModalFooter className="border-t bg-slate-50">
-                <Button color="danger" variant="light" onPress={onClose}>
-                  Batal
+                <Button color="danger" variant="flat" onPress={onClose}>
+                  {modalMode === "view" ? "Tutup" : "Batal"}
                 </Button>
-                <Button
-                  color="primary"
-                  className="bg-klinik-blue font-bold"
-                  isLoading={saveMutation.isPending}
-                  onPress={() => saveMutation.mutate(formData)}
-                >
-                  Simpan Data
-                </Button>
+                {modalMode !== "view" && (
+                  <Button
+                    color="primary"
+                    className="bg-klinik-blue font-semibold"
+                    type="submit"
+                    isLoading={saveMutation.isPending || isSubmitting}
+                  >
+                    {saveMutation.isPending ? "Menyimpan..." : "Simpan Data"}
+                  </Button>
+                )}
               </ModalFooter>
-            </>
+            </form>
           )}
         </ModalContent>
       </Modal>

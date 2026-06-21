@@ -37,7 +37,6 @@ import { useRouter } from "next/navigation";
 interface Pasien {
   id_rm: string;
   nama: string;
-  nik: string;
   jenis_kelamin: string;
   tanggal_lahir: string;
   no_telepon: string;
@@ -46,14 +45,9 @@ interface Pasien {
 
 type ModalMode = "create" | "edit" | "view";
 
-// Skema disesuaikan persis dengan kebutuhan Backend
 const pasienSchema = yup.object().shape({
-  id_rm: yup.string().optional(), // Hanya dipakai saat edit
+  id_rm: yup.string().optional(),
   nama: yup.string().required("Nama lengkap wajib diisi"),
-  nik: yup
-    .string()
-    .required("NIK wajib diisi")
-    .length(16, "NIK harus 16 digit"),
   jenis_kelamin: yup.string().required("Pilih jenis kelamin"),
   tanggal_lahir: yup.string().required("Tanggal lahir wajib diisi"),
   no_telepon: yup.string().required("Nomor telepon wajib diisi"),
@@ -67,12 +61,10 @@ export default function PasienPage() {
   const queryClient = useQueryClient();
   const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 
-  // State UI
   const [searchQuery, setSearchQuery] = useState("");
   const [modalMode, setModalMode] = useState<ModalMode>("create");
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Setup React Hook Form
   const {
     register,
     handleSubmit,
@@ -81,7 +73,7 @@ export default function PasienPage() {
     reset,
     formState: { errors, isSubmitting },
   } = useForm<PasienFormData>({
-    resolver: yupResolver(pasienSchema) as any, // "as any" untuk mencegah error build Vercel
+    resolver: yupResolver(pasienSchema) as any,
   });
 
   // =========================================================================
@@ -101,7 +93,6 @@ export default function PasienPage() {
     },
   });
 
-  // Filter Data Lokal
   const filteredPasien = listPasien.filter(
     (p) =>
       p.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -117,7 +108,6 @@ export default function PasienPage() {
     reset({
       id_rm: "",
       nama: "",
-      nik: "",
       jenis_kelamin: "",
       tanggal_lahir: "",
       no_telepon: "",
@@ -129,24 +119,18 @@ export default function PasienPage() {
   const handleOpenAction = async (id_rm: string, mode: "edit" | "view") => {
     setModalMode(mode);
     setErrorMsg("");
-
-    // Buka modal dengan form kosong (atau data lama) sambil menunggu fetch selesai
     onOpen();
 
     try {
       const response = await api.get(`/pasien/${id_rm}`);
       const dataPasien = response.data.data;
-
-      // Konversi format tanggal backend (ISO) ke YYYY-MM-DD untuk input html
       const formattedDate = new Date(dataPasien.tanggal_lahir)
         .toISOString()
         .split("T")[0];
 
-      // Masukkan data dari backend ke dalam React Hook Form
       reset({
         id_rm: dataPasien.id_rm,
         nama: dataPasien.nama,
-        nik: dataPasien.nik,
         jenis_kelamin: dataPasien.jenis_kelamin,
         tanggal_lahir: formattedDate,
         no_telepon: dataPasien.no_telepon,
@@ -158,10 +142,8 @@ export default function PasienPage() {
   };
 
   // =========================================================================
-  // 4. REACT QUERY MUTATIONS (POST, PUT, DELETE)
+  // 4. REACT QUERY MUTATIONS
   // =========================================================================
-
-  // Mutasi Simpan/Edit
   const saveMutation = useMutation({
     mutationFn: async (data: PasienFormData) => {
       if (modalMode === "create") {
@@ -188,7 +170,6 @@ export default function PasienPage() {
     saveMutation.mutate(data);
   };
 
-  // Mutasi Hapus
   const deleteMutation = useMutation({
     mutationFn: async (id_rm: string) => {
       return await api.delete(`/pasien/${id_rm}`);
@@ -215,7 +196,6 @@ export default function PasienPage() {
   // =========================================================================
   return (
     <div className="flex flex-col gap-6">
-      {/* HEADER */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">
@@ -235,7 +215,6 @@ export default function PasienPage() {
         </Button>
       </div>
 
-      {/* PENCARIAN */}
       <Card className="shadow-sm">
         <CardBody>
           <Input
@@ -250,7 +229,6 @@ export default function PasienPage() {
         </CardBody>
       </Card>
 
-      {/* TABEL */}
       <div className="overflow-x-auto w-full">
         <Table
           aria-label="Tabel Master Data Pasien"
@@ -259,7 +237,6 @@ export default function PasienPage() {
           <TableHeader>
             <TableColumn>ID RM</TableColumn>
             <TableColumn>NAMA PASIEN</TableColumn>
-            <TableColumn>NIK (DECRYPTED)</TableColumn>
             <TableColumn>JENIS KELAMIN</TableColumn>
             <TableColumn>TANGGAL LAHIR</TableColumn>
             <TableColumn>NO. TELEPON</TableColumn>
@@ -291,9 +268,6 @@ export default function PasienPage() {
                 <TableCell className="font-medium text-slate-700 whitespace-nowrap">
                   {pasien.nama}
                 </TableCell>
-                <TableCell className="font-mono text-xs">
-                  {pasien.nik}
-                </TableCell>
                 <TableCell>{pasien.jenis_kelamin}</TableCell>
                 <TableCell className="whitespace-nowrap">
                   {new Date(pasien.tanggal_lahir).toLocaleDateString("id-ID", {
@@ -306,8 +280,7 @@ export default function PasienPage() {
                   {pasien.no_telepon}
                 </TableCell>
                 <TableCell>
-                  {/* Menambahkan pembatas teks agar alamat yang panjang tidak merusak tabel */}
-                  <div className="max-w-[200px] truncate" title={pasien.alamat}>
+                  <div className="max-w-[250px] truncate" title={pasien.alamat}>
                     {pasien.alamat}
                   </div>
                 </TableCell>
@@ -356,7 +329,6 @@ export default function PasienPage() {
         </Table>
       </div>
 
-      {/* MODAL FORM */}
       <Modal
         isOpen={isOpen}
         onOpenChange={onOpenChange}
@@ -392,7 +364,6 @@ export default function PasienPage() {
                   </div>
                 )}
 
-                {/* ID RM (Read Only - muncul saat edit/view) */}
                 {modalMode !== "create" && watch("id_rm") && (
                   <Input
                     label="ID Rekam Medis"
@@ -403,28 +374,17 @@ export default function PasienPage() {
                   />
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input
-                    {...register("nama")}
-                    isRequired
-                    label="Nama Lengkap"
-                    variant="bordered"
-                    isReadOnly={modalMode === "view"}
-                    isInvalid={!!errors.nama}
-                    errorMessage={errors.nama?.message}
-                  />
-                  <Input
-                    {...register("nik")}
-                    isRequired
-                    label="NIK (16 Digit)"
-                    maxLength={16}
-                    variant="bordered"
-                    isReadOnly={modalMode === "view"}
-                    isInvalid={!!errors.nik}
-                    errorMessage={errors.nik?.message}
-                  />
+                <Input
+                  {...register("nama")}
+                  isRequired
+                  label="Nama Lengkap"
+                  variant="bordered"
+                  isReadOnly={modalMode === "view"}
+                  isInvalid={!!errors.nama}
+                  errorMessage={errors.nama?.message}
+                />
 
-                  {/* Penanganan Select NextUI dengan React Hook Form */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {modalMode === "view" ? (
                     <Input
                       label="Jenis Kelamin"
@@ -468,24 +428,26 @@ export default function PasienPage() {
                   />
                 </div>
 
-                <Input
-                  {...register("no_telepon")}
-                  isRequired
-                  label="Nomor Telepon / WA"
-                  variant="bordered"
-                  isReadOnly={modalMode === "view"}
-                  isInvalid={!!errors.no_telepon}
-                  errorMessage={errors.no_telepon?.message}
-                />
-                <Textarea
-                  {...register("alamat")}
-                  isRequired
-                  label="Alamat Lengkap"
-                  variant="bordered"
-                  isReadOnly={modalMode === "view"}
-                  isInvalid={!!errors.alamat}
-                  errorMessage={errors.alamat?.message}
-                />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    {...register("no_telepon")}
+                    isRequired
+                    label="Nomor Telepon / WA"
+                    variant="bordered"
+                    isReadOnly={modalMode === "view"}
+                    isInvalid={!!errors.no_telepon}
+                    errorMessage={errors.no_telepon?.message}
+                  />
+                  <Textarea
+                    {...register("alamat")}
+                    isRequired
+                    label="Alamat Lengkap"
+                    variant="bordered"
+                    isReadOnly={modalMode === "view"}
+                    isInvalid={!!errors.alamat}
+                    errorMessage={errors.alamat?.message}
+                  />
+                </div>
               </ModalBody>
 
               <ModalFooter className="border-t bg-slate-50">
