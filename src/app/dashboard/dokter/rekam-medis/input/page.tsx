@@ -17,6 +17,7 @@ import {
   Select,
   SelectItem,
   Spinner,
+  Divider,
 } from "@nextui-org/react";
 import { Save, Activity, Stethoscope, Pill, ArrowLeft } from "lucide-react";
 import api from "@/lib/axios";
@@ -24,7 +25,6 @@ import api from "@/lib/axios";
 // =========================================================================
 // 1. SKEMA VALIDASI YUP
 // =========================================================================
-// Semua field bersifat opsional kecuali Diagnosis Utama
 const rekamMedisSchema = yup.object().shape({
   tgl_masuk: yup.string().optional(),
   tgl_keluar: yup.string().optional(),
@@ -93,7 +93,6 @@ function RekamMedisForm() {
       });
     },
     onSuccess: () => {
-      // Menyegarkan antrean dokter di background agar status "PEMERIKSAAN" hilang
       queryClient.invalidateQueries({ queryKey: ["antreanDokter"] });
       alert("Rekam Medis (Ringkasan Pulang) berhasil disimpan dan dienkripsi!");
       router.push("/dashboard/dokter/antrean");
@@ -110,7 +109,6 @@ function RekamMedisForm() {
     mutation.mutate(data);
   };
 
-  // Pengecekan parameter keamanan
   if (!nopen || !id_rm) {
     return (
       <div className="flex flex-col items-center justify-center p-10 text-center border border-red-200 bg-red-50 rounded-xl max-w-lg mx-auto mt-10">
@@ -178,7 +176,6 @@ function RekamMedisForm() {
                     <h3 className="font-semibold text-slate-700 border-b pb-2">
                       Data Administrasi
                     </h3>
-                    {/* JURUS ANTI-GAGAL: BIKIN LABEL MANUAL */}
                     <div className="grid grid-cols-2 gap-4 mt-1">
                       <div className="flex flex-col gap-1.5">
                         <label className="text-sm font-medium text-slate-700">
@@ -206,6 +203,8 @@ function RekamMedisForm() {
                       label="Ruang Rawat (Misal: Kelas II)"
                       variant="bordered"
                     />
+
+                    {/* Select: Kondisi Keluar */}
                     <Select
                       {...register("kondisi_keluar")}
                       label="Kondisi Keluar"
@@ -226,10 +225,42 @@ function RekamMedisForm() {
                         Sembuh
                       </SelectItem>
                       <SelectItem key="Belum Sembuh" value="Belum Sembuh">
-                        Belum Sembuh
+                        Belum Sembuh / Stabil
                       </SelectItem>
                       <SelectItem key="Membaik" value="Membaik">
                         Membaik
+                      </SelectItem>
+                      <SelectItem key="Memburuk" value="Memburuk">
+                        Memburuk / Kritis
+                      </SelectItem>
+                    </Select>
+
+                    {/* Select: Cara Keluar */}
+                    <Select
+                      {...register("cara_keluar")}
+                      label="Cara Keluar / Tindak Lanjut"
+                      variant="bordered"
+                      selectedKeys={
+                        watch("cara_keluar") ? [watch("cara_keluar")!] : []
+                      }
+                      onSelectionChange={(keys) =>
+                        setValue("cara_keluar", Array.from(keys)[0] as string)
+                      }
+                    >
+                      <SelectItem
+                        key="Diijinkan Pulang"
+                        value="Diijinkan Pulang"
+                      >
+                        Diijinkan Pulang / Rawat Jalan
+                      </SelectItem>
+                      <SelectItem key="Kontrol Ulang" value="Kontrol Ulang">
+                        Disarankan Kontrol Ulang
+                      </SelectItem>
+                      <SelectItem key="Dirujuk" value="Dirujuk">
+                        Rujuk ke RS / Spesialis
+                      </SelectItem>
+                      <SelectItem key="Rawat Inap" value="Rawat Inap">
+                        Indikasi Rawat Inap
                       </SelectItem>
                     </Select>
                   </div>
@@ -265,12 +296,99 @@ function RekamMedisForm() {
                         variant="bordered"
                       />
                     </div>
-                    <Input
-                      {...register("kesadaran")}
-                      label="Kesadaran"
-                      placeholder="Sadar Baik / Alert"
+
+                    {/* Select: Keadaan Umum */}
+                    <Select
+                      {...register("keadaan_umum")}
+                      label="Keadaan Umum"
                       variant="bordered"
-                    />
+                      selectedKeys={
+                        watch("keadaan_umum") ? [watch("keadaan_umum")!] : []
+                      }
+                      onSelectionChange={(keys) =>
+                        setValue("keadaan_umum", Array.from(keys)[0] as string)
+                      }
+                    >
+                      <SelectItem key="Tampak Baik" value="Tampak Baik">
+                        Tampak Baik
+                      </SelectItem>
+                      <SelectItem
+                        key="Tampak Sakit Sedang"
+                        value="Tampak Sakit Sedang"
+                      >
+                        Tampak Sakit Sedang
+                      </SelectItem>
+                      <SelectItem
+                        key="Tampak Sakit Berat"
+                        value="Tampak Sakit Berat"
+                      >
+                        Tampak Sakit Berat
+                      </SelectItem>
+                    </Select>
+
+                    {/* Select: Kesadaran */}
+                    <Select
+                      {...register("kesadaran")}
+                      label="Kesadaran (GCS)"
+                      variant="bordered"
+                      selectedKeys={
+                        watch("kesadaran") ? [watch("kesadaran")!] : []
+                      }
+                      onSelectionChange={(keys) =>
+                        setValue("kesadaran", Array.from(keys)[0] as string)
+                      }
+                    >
+                      <SelectItem key="Compos Mentis" value="Compos Mentis">
+                        Compos Mentis (Sadar Penuh)
+                      </SelectItem>
+                      <SelectItem key="Apatis" value="Apatis">
+                        Apatis (Acuh tak acuh)
+                      </SelectItem>
+                      <SelectItem key="Somnolen" value="Somnolen">
+                        Somnolen (Mengantuk)
+                      </SelectItem>
+                      <SelectItem key="Sopor" value="Sopor">
+                        Sopor (Tidur Nyenyak)
+                      </SelectItem>
+                      <SelectItem key="Koma" value="Koma">
+                        Koma
+                      </SelectItem>
+                    </Select>
+
+                    {/* Select: Skala Nyeri */}
+                    <Select
+                      {...register("skala_nyeri")}
+                      label="Skala Nyeri (0-10)"
+                      variant="bordered"
+                      selectedKeys={
+                        watch("skala_nyeri") ? [watch("skala_nyeri")!] : []
+                      }
+                      onSelectionChange={(keys) =>
+                        setValue("skala_nyeri", Array.from(keys)[0] as string)
+                      }
+                    >
+                      <SelectItem key="0 - Tidak Nyeri" value="0 - Tidak Nyeri">
+                        0 - Tidak Nyeri
+                      </SelectItem>
+                      <SelectItem
+                        key="1-3 (Nyeri Ringan)"
+                        value="1-3 (Nyeri Ringan)"
+                      >
+                        1-3 - Nyeri Ringan
+                      </SelectItem>
+                      <SelectItem
+                        key="4-6 (Nyeri Sedang)"
+                        value="4-6 (Nyeri Sedang)"
+                      >
+                        4-6 - Nyeri Sedang
+                      </SelectItem>
+                      <SelectItem
+                        key="7-10 (Nyeri Berat)"
+                        value="7-10 (Nyeri Berat)"
+                      >
+                        7-10 - Nyeri Berat
+                      </SelectItem>
+                    </Select>
                   </div>
                 </div>
               </Tab>
@@ -308,12 +426,30 @@ function RekamMedisForm() {
                         minRows={2}
                         variant="bordered"
                       />
-                      <Input
+
+                      {/* Select: Alergi */}
+                      <Select
                         {...register("alergi")}
-                        label="Alergi Obat"
-                        placeholder="Tidak Ada"
+                        label="Alergi"
                         variant="bordered"
-                      />
+                        selectedKeys={watch("alergi") ? [watch("alergi")!] : []}
+                        onSelectionChange={(keys) =>
+                          setValue("alergi", Array.from(keys)[0] as string)
+                        }
+                      >
+                        <SelectItem key="Tidak Ada" value="Tidak Ada">
+                          Tidak Ada Alergi (Disangkal)
+                        </SelectItem>
+                        <SelectItem key="Alergi Obat" value="Alergi Obat">
+                          Alergi Obat (Sebutkan di Pemeriksaan)
+                        </SelectItem>
+                        <SelectItem
+                          key="Alergi Makanan/Debu"
+                          value="Alergi Makanan/Debu"
+                        >
+                          Alergi Makanan / Debu / Cuaca
+                        </SelectItem>
+                      </Select>
                     </div>
                   </div>
 
@@ -418,15 +554,35 @@ function RekamMedisForm() {
                     Edukasi & Follow Up
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <Input
+                    {/* Select: Rencana Diet */}
+                    <Select
                       {...register("rencana_diet")}
-                      label="Rencana Diet"
-                      placeholder="Makanan Biasa"
+                      label="Rencana Diet / Nutrisi"
                       variant="bordered"
-                    />
+                      selectedKeys={
+                        watch("rencana_diet") ? [watch("rencana_diet")!] : []
+                      }
+                      onSelectionChange={(keys) =>
+                        setValue("rencana_diet", Array.from(keys)[0] as string)
+                      }
+                    >
+                      <SelectItem key="Bebas" value="Bebas">
+                        Bebas / Makanan Biasa
+                      </SelectItem>
+                      <SelectItem key="Rendah Garam" value="Rendah Garam">
+                        Rendah Garam (Hipertensi)
+                      </SelectItem>
+                      <SelectItem key="Rendah Gula" value="Rendah Gula">
+                        Rendah Gula (Diabetes)
+                      </SelectItem>
+                      <SelectItem key="Lunak/Cair" value="Lunak/Cair">
+                        Makanan Lunak / Cair
+                      </SelectItem>
+                    </Select>
+
                     <Textarea
                       {...register("edukasi")}
-                      label="Edukasi"
+                      label="Edukasi Tambahan"
                       placeholder="Jaga kebersihan, pantau tumbuh kembang..."
                       className="sm:col-span-2"
                       minRows={2}
@@ -464,7 +620,6 @@ function RekamMedisForm() {
 // =========================================================================
 // 3. PEMBUNGKUS SUSPENSE (BEST PRACTICE NEXT.JS 14+)
 // =========================================================================
-// Wajib dibungkus Suspense karena kita menggunakan useSearchParams()
 export default function InputRekamMedisPage() {
   return (
     <Suspense
