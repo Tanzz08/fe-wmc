@@ -12,9 +12,7 @@ import {
   ClipboardList,
   ShieldCheck,
   FileText,
-  Pill,
-  PackageSearch, // <-- 1. TAMBAHKAN ICON INI
-  LayoutDashboard,
+  PackageSearch,
   UserCog,
   Archive,
 } from "lucide-react";
@@ -50,8 +48,8 @@ export default function DashboardLayout({
   // LOGIKA MENU DINAMIS (Berdasarkan Role dari NextAuth)
   // ==========================================================
   const isDokter = session?.user?.role === "DOKTER";
-  const isApoteker = session?.user?.role === "APOTEKER"; // <--- CEK ROLE APOTEKER
-  const isAdmin = session?.user?.role === "SUPER_ADMIN"; // <--- CEK ROLE ADMIN
+  const isAdmin = session?.user?.role === "SUPER_ADMIN";
+
   const menuResepsionis = [
     {
       name: "Pendaftaran Antrean",
@@ -63,7 +61,6 @@ export default function DashboardLayout({
       path: "/dashboard/resepsionis/pasien",
       icon: <Users size={20} />,
     },
-    // <-- 2. TAMBAHKAN OBJECT MENU BARU DI SINI
     {
       name: "Laporan SLA Kunjungan",
       path: "/dashboard/resepsionis/laporan-antrean",
@@ -84,20 +81,6 @@ export default function DashboardLayout({
     },
   ];
 
-  // MENU KHUSUS APOTEKER
-  const menuApoteker = [
-    {
-      name: "Antrean Resep",
-      path: "/dashboard/apoteker/antrean",
-      icon: <Pill size={20} />,
-    },
-    {
-      name: "Master Obat",
-      path: "/dashboard/apoteker/obat", // <--- TAMBAHKAN INI
-      icon: <PackageSearch size={20} />,
-    },
-  ];
-
   const menuAdmin = [
     {
       name: "Manajemen Pegawai",
@@ -114,9 +97,15 @@ export default function DashboardLayout({
       path: "/dashboard/admin/obat",
       icon: <PackageSearch size={20} />,
     },
+    // <-- PERUBAHAN DI SINI: MENU DIPISAH JADI DUA
     {
-      name: "Arsip & Laporan",
+      name: "Laporan Kunjungan",
       path: "/dashboard/admin/laporan",
+      icon: <FileText size={20} />,
+    },
+    {
+      name: "Arsip Rekam Medis",
+      path: "/dashboard/admin/arsip-rm",
       icon: <Archive size={20} />,
     },
   ];
@@ -124,7 +113,6 @@ export default function DashboardLayout({
   // LOGIKA PENENTUAN MENU AKTIF
   let activeMenu = menuResepsionis; // Default
   if (isDokter) activeMenu = menuDokter;
-  if (isApoteker) activeMenu = menuApoteker; // <--- PASANG MENU APOTEKER
   if (isAdmin) activeMenu = menuAdmin;
 
   return (
@@ -137,14 +125,7 @@ export default function DashboardLayout({
 
         <nav className="flex-1 flex flex-col gap-2">
           <p className="text-xs text-slate-300 mb-2 font-semibold uppercase tracking-wider">
-            Menu{" "}
-            {isDokter
-              ? "Dokter"
-              : isApoteker
-                ? "Apoteker"
-                : isAdmin
-                  ? "Admin"
-                  : "Resepsionis"}
+            Menu {isDokter ? "Dokter" : isAdmin ? "Admin" : "Resepsionis"}
           </p>
 
           {/* Render Menu Otomatis */}

@@ -127,6 +127,7 @@ export default function AntreanPage() {
   // =========================================================================
   const todayStr = new Date().toDateString();
 
+  // Menyaring antrean agar hanya menampilkan pendaftaran hari ini saja
   const antreanHariIni = listAntrean.filter((a) => {
     return new Date(a.tgl_registrasi).toDateString() === todayStr;
   });
@@ -139,14 +140,10 @@ export default function AntreanPage() {
     (a) =>
       a.status_antrean === "PEMERIKSAAN" || a.status_antrean === "PROSES_POLI",
   ).length;
+
+  // Diringkas: Langsung cari yang statusnya SELESAI
   const selesaiPoli = antreanHariIni.filter(
-    (a) =>
-      a.status_antrean === "SELESAI_POLI" ||
-      a.status_antrean === "TUNGGU_FARMASI" ||
-      a.status_antrean === "FARMASI" ||
-      a.status_antrean === "OBAT_SIAP" ||
-      a.status_antrean === "SELESAI_FARMASI" ||
-      a.status_antrean === "SELESAI",
+    (a) => a.status_antrean === "SELESAI",
   ).length;
 
   // =========================================================================
@@ -207,12 +204,7 @@ export default function AntreanPage() {
             Diperiksa
           </Chip>
         );
-      case "SELESAI_POLI":
-      case "TUNGGU_FARMASI":
-      case "FARMASI":
-      case "OBAT_SIAP":
-      case "SELESAI_FARMASI":
-      case "SELESAI":
+      case "SELESAI": // <--- Hanya menyisakan SELESAI
         return (
           <Chip
             color="success"
