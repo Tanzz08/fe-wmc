@@ -461,6 +461,12 @@ export default function AntreanPage() {
                     <SelectItem key="UGD" value="UGD">
                       UGD
                     </SelectItem>
+                    <SelectItem key="IGD" value="IGD">
+                      IGD
+                    </SelectItem>
+                    <SelectItem key="Rawat Inap" value="Rawat Inap">
+                      Rawat Inap
+                    </SelectItem>
                   </Select>
 
                   <Select
