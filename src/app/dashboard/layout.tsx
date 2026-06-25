@@ -62,7 +62,7 @@ export default function DashboardLayout({
       icon: <Users size={20} />,
     },
     {
-      name: "Laporan SLA Kunjungan",
+      name: "Laporan Kunjungan",
       path: "/dashboard/resepsionis/laporan-antrean",
       icon: <FileText size={20} />,
     },
