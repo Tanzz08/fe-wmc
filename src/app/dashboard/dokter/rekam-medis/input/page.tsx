@@ -107,7 +107,7 @@ function RekamMedisForm() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["antreanDokter"] });
-      alert("Rekam Medis (Ringkasan Pulang) berhasil disimpan dan dienkripsi!");
+      alert("Rekam Medis (Rekam Medis) berhasil disimpan dan dienkripsi!");
       router.push("/dashboard/dokter/antrean");
     },
     onError: (error: any) => {
@@ -148,7 +148,7 @@ function RekamMedisForm() {
         </Button>
         <div>
           <h1 className="text-2xl font-bold text-slate-800">
-            Pengisian Ringkasan Pulang
+            Pengisian Rekam Medis
           </h1>
           <p className="text-sm text-slate-500">
             Nomor Pendaftaran: <span className="font-semibold">{nopen}</span> |
@@ -652,7 +652,7 @@ function RekamMedisForm() {
           >
             {mutation.isPending
               ? "Menyimpan Data..."
-              : "Simpan Ringkasan Pulang"}
+              : "Simpan Rekam Medis"}
           </Button>
         </div>
       </form>
