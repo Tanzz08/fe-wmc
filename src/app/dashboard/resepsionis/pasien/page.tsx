@@ -64,6 +64,7 @@ export default function PasienPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [modalMode, setModalMode] = useState<ModalMode>("create");
   const [errorMsg, setErrorMsg] = useState("");
+  const [globalError, setGlobalError] = useState("");
 
   const {
     register,
@@ -169,6 +170,11 @@ export default function PasienPage() {
     setErrorMsg("");
     saveMutation.mutate(data);
   };
+
+  const onValidationError = (errors: any) => {
+    setGlobalError(
+      "Gagal menyimpan: Harap periksa kembali form Anda. Ada field wajib yang belum diisi!",
+    );
 
   const deleteMutation = useMutation({
     mutationFn: async (id_rm: string) => {
@@ -338,7 +344,7 @@ export default function PasienPage() {
       >
         <ModalContent>
           {(onClose) => (
-            <form onSubmit={handleSubmit(onSubmitForm)}>
+            <form onSubmit={handleSubmit(onSubmitForm, onValidationError)}>
               <ModalHeader className="flex items-center gap-2 border-b">
                 <UserPlus className="text-klinik-blue" size={24} />
                 <div className="flex flex-col">
@@ -358,9 +364,9 @@ export default function PasienPage() {
               </ModalHeader>
 
               <ModalBody className="py-6 flex flex-col gap-4">
-                {errorMsg && (
+                {globalError && (
                   <div className="p-3 bg-red-100 text-red-700 text-sm rounded-lg text-center font-medium">
-                    {errorMsg}
+                    {globalError}
                   </div>
                 )}
 
