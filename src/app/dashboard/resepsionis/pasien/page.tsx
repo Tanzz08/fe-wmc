@@ -175,6 +175,7 @@ export default function PasienPage() {
     setGlobalError(
       "Gagal menyimpan: Harap periksa kembali form Anda. Ada field wajib yang belum diisi!",
     );
+  };
 
   const deleteMutation = useMutation({
     mutationFn: async (id_rm: string) => {
