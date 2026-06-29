@@ -47,11 +47,11 @@ type ModalMode = "create" | "edit" | "view";
 
 const pasienSchema = yup.object().shape({
   id_rm: yup.string().optional(),
-  nama: yup.string().required("Nama lengkap wajib diisi"),
-  jenis_kelamin: yup.string().required("Pilih jenis kelamin"),
-  tanggal_lahir: yup.string().required("Tanggal lahir wajib diisi"),
-  no_telepon: yup.string().required("Nomor telepon wajib diisi"),
-  alamat: yup.string().required("Alamat wajib diisi"),
+  nama: yup.string().required("Nama lengkap wajib diisi!"),
+  jenis_kelamin: yup.string().required("Silakan pilih jenis kelamin!"),
+  tanggal_lahir: yup.string().required("Tanggal lahir wajib diisi!"),
+  no_telepon: yup.string().required("Nomor telepon wajib diisi!"),
+  alamat: yup.string().required("Alamat lengkap wajib diisi!"),
 });
 
 type PasienFormData = yup.InferType<typeof pasienSchema>;
@@ -75,6 +75,7 @@ export default function PasienPage() {
     formState: { errors, isSubmitting },
   } = useForm<PasienFormData>({
     resolver: yupResolver(pasienSchema) as any,
+    mode: "all", // 🔥 PENTING: Memicu validasi setiap saat (saat diketik & saat submit)
   });
 
   // =========================================================================
@@ -106,7 +107,7 @@ export default function PasienPage() {
   const handleOpenCreate = () => {
     setModalMode("create");
     setErrorMsg("");
-    setGlobalError(""); // Reset error global
+    setGlobalError("");
     reset({
       id_rm: "",
       nama: "",
@@ -121,7 +122,7 @@ export default function PasienPage() {
   const handleOpenAction = async (id_rm: string, mode: "edit" | "view") => {
     setModalMode(mode);
     setErrorMsg("");
-    setGlobalError(""); // Reset error global
+    setGlobalError("");
     onOpen();
 
     try {
@@ -160,7 +161,7 @@ export default function PasienPage() {
       onClose();
     },
     onError: (error: any) => {
-      setGlobalError(""); // Sembunyikan pesan wajib isi
+      setGlobalError("");
       setErrorMsg(
         error.response?.data?.message ||
           "Terjadi kesalahan sistem saat menyimpan data.",
@@ -171,14 +172,13 @@ export default function PasienPage() {
   const onSubmitForm: SubmitHandler<PasienFormData> = (data) => {
     if (modalMode === "view") return onClose();
     setErrorMsg("");
-    setGlobalError(""); // Hapus pesan error jika submit valid
+    setGlobalError("");
     saveMutation.mutate(data);
   };
 
-  const onValidationError = (errors: any) => {
-    // Munculkan pesan error merah jika ada field wajib terlewat
+  const onValidationError = () => {
     setGlobalError(
-      "Gagal menyimpan: Harap periksa kembali form Anda. Ada field wajib yang belum diisi!",
+      "Gagal menyimpan: Silakan lengkapi kolom yang berwarna merah di bawah ini!",
     );
   };
 
@@ -370,7 +370,7 @@ export default function PasienPage() {
               </ModalHeader>
 
               <ModalBody className="py-6 flex flex-col gap-4">
-                {/* GLOBAL ERROR (Pesan Wajib Isi / Pesan Error dari Server) */}
+                {/* GLOBAL ERROR */}
                 {(globalError || errorMsg) && (
                   <div className="p-3 bg-red-100 text-red-700 text-sm rounded-lg text-center font-medium">
                     {globalError || errorMsg}
@@ -387,6 +387,7 @@ export default function PasienPage() {
                   />
                 )}
 
+                {/* 🔴 FIELD DENGAN PESAN ERROR DI BAWAHNYA 🔴 */}
                 <Input
                   {...register("nama")}
                   isRequired
@@ -407,10 +408,10 @@ export default function PasienPage() {
                     />
                   ) : (
                     <Select
+                      {...register("jenis_kelamin")}
                       isRequired
                       label="Jenis Kelamin"
                       variant="bordered"
-                      // Perbaikan SelectedKeys dan shouldValidate
                       selectedKeys={
                         new Set(
                           watch("jenis_kelamin")
