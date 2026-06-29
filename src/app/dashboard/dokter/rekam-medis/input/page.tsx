@@ -610,14 +610,14 @@ function RekamMedisForm() {
                       <SelectItem key="Bebas" value="Bebas">
                         Bebas / Makanan Biasa
                       </SelectItem>
-                      <SelectItem key="Rendah Garam" value="Rendah Garam">
-                        Rendah Garam (Hipertensi)
+                      <SelectItem key="Kurangi Garam" value="Kurangi Garam">
+                        Kurangi Garam (Hipertensi)
                       </SelectItem>
-                      <SelectItem key="Rendah Gula" value="Rendah Gula">
-                        Rendah Gula (Diabetes)
+                      <SelectItem key="Kurangi Gula" value="Kurangi Gula">
+                        Kurangi Gula (Diabetes)
                       </SelectItem>
                       <SelectItem key="Lunak/Cair" value="Lunak/Cair">
-                        Makanan Lunak / Cair
+                        Makan Makanan Lunak / Cair
                       </SelectItem>
                     </Select>
 
