@@ -106,6 +106,7 @@ export default function PasienPage() {
   const handleOpenCreate = () => {
     setModalMode("create");
     setErrorMsg("");
+    setGlobalError(""); // Reset error global
     reset({
       id_rm: "",
       nama: "",
@@ -120,6 +121,7 @@ export default function PasienPage() {
   const handleOpenAction = async (id_rm: string, mode: "edit" | "view") => {
     setModalMode(mode);
     setErrorMsg("");
+    setGlobalError(""); // Reset error global
     onOpen();
 
     try {
@@ -158,6 +160,7 @@ export default function PasienPage() {
       onClose();
     },
     onError: (error: any) => {
+      setGlobalError(""); // Sembunyikan pesan wajib isi
       setErrorMsg(
         error.response?.data?.message ||
           "Terjadi kesalahan sistem saat menyimpan data.",
@@ -168,10 +171,12 @@ export default function PasienPage() {
   const onSubmitForm: SubmitHandler<PasienFormData> = (data) => {
     if (modalMode === "view") return onClose();
     setErrorMsg("");
+    setGlobalError(""); // Hapus pesan error jika submit valid
     saveMutation.mutate(data);
   };
 
   const onValidationError = (errors: any) => {
+    // Munculkan pesan error merah jika ada field wajib terlewat
     setGlobalError(
       "Gagal menyimpan: Harap periksa kembali form Anda. Ada field wajib yang belum diisi!",
     );
@@ -365,9 +370,10 @@ export default function PasienPage() {
               </ModalHeader>
 
               <ModalBody className="py-6 flex flex-col gap-4">
-                {globalError && (
+                {/* GLOBAL ERROR (Pesan Wajib Isi / Pesan Error dari Server) */}
+                {(globalError || errorMsg) && (
                   <div className="p-3 bg-red-100 text-red-700 text-sm rounded-lg text-center font-medium">
-                    {globalError}
+                    {globalError || errorMsg}
                   </div>
                 )}
 
@@ -401,15 +407,23 @@ export default function PasienPage() {
                     />
                   ) : (
                     <Select
-                      {...register("jenis_kelamin")}
                       isRequired
                       label="Jenis Kelamin"
                       variant="bordered"
+                      // Perbaikan SelectedKeys dan shouldValidate
                       selectedKeys={
-                        watch("jenis_kelamin") ? [watch("jenis_kelamin")] : []
+                        new Set(
+                          watch("jenis_kelamin")
+                            ? [watch("jenis_kelamin")]
+                            : [],
+                        )
                       }
                       onSelectionChange={(keys) =>
-                        setValue("jenis_kelamin", Array.from(keys)[0] as string)
+                        setValue(
+                          "jenis_kelamin",
+                          Array.from(keys)[0] as string,
+                          { shouldValidate: true },
+                        )
                       }
                       isInvalid={!!errors.jenis_kelamin}
                       errorMessage={errors.jenis_kelamin?.message}
