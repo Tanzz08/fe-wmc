@@ -37,9 +37,6 @@ interface Antrean {
   tgl_input_asesmen?: string | null;
   tgl_input_tindakan?: string | null;
   tgl_final_poli?: string | null;
-  tgl_order_resep?: string | null;
-  tgl_masuk_farmasi?: string | null;
-  tgl_selesai_farmasi?: string | null;
   user_daftar?: { username: string };
 }
 
@@ -60,9 +57,9 @@ export default function LaporanAntreanPage() {
       const fetchedData = res.data?.data || res.data;
       return Array.isArray(fetchedData) ? fetchedData : [];
     },
-    // TAMBAHKAN 2 BARIS INI:
-    refetchInterval: 3000, // Refresh data otomatis setiap 3 detik
-    refetchOnWindowFocus: true, // Refresh saat ganti tab browser
+    // Refresh otomatis
+    refetchInterval: 3000,
+    refetchOnWindowFocus: true,
   });
 
   // Filter Logic Bertingkat (Dengan Rentang Tanggal)
@@ -327,7 +324,7 @@ export default function LaporanAntreanPage() {
               body { background-color: white !important; font-family: Arial, sans-serif; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
               aside, nav, header { display: none !important; }
               table { width: 100%; border-collapse: collapse; }
-              th, td { border: 1px solid #000; padding: 2px 4px; font-size: 7.5px; text-align: center; word-wrap: break-word; }
+              th, td { border: 1px solid #000; padding: 4px 6px; font-size: 8px; text-align: center; word-wrap: break-word; }
               th { background-color: #f1f5f9 !important; font-weight: bold; }
               .text-left { text-align: left; }
             }
@@ -335,11 +332,11 @@ export default function LaporanAntreanPage() {
         </style>
 
         <div className="text-center mb-4">
-          <h2 className="text-sm font-bold uppercase mb-1">
+          <h2 className="text-base font-bold uppercase mb-1">
             Laporan Register Antrean Pasien & Indikator Mutu Nasional (INM)
           </h2>
-          <p className="text-xs">WIHDATUL UMMAH MEDICAL CENTER</p>
-          <p className="text-[10px] mt-1 pb-2">
+          <p className="text-sm font-semibold">WIHDATUL UMMAH MEDICAL CENTER</p>
+          <p className="text-xs mt-1 pb-2 border-b-2 border-black">
             Periode: {startDate ? formatDateOnly(startDate) : "Awal"} s.d{" "}
             {endDate ? formatDateOnly(endDate) : "Akhir"}
             {" | "} Instalasi: {filterInstalasi} | Unit: {filterUnit}
@@ -362,14 +359,14 @@ export default function LaporanAntreanPage() {
               <th rowSpan={2}>Instalasi</th>
               <th rowSpan={2}>Unit Pelayanan</th>
               <th rowSpan={2}>Cara Bayar</th>
-              <th colSpan={8}>Pencatatan Waktu (Jam:Menit)</th>
-              <th colSpan={7}>Waktu Tunggu / Pelayanan (Menit)</th>
+              <th colSpan={5}>Pencatatan Waktu Pelayanan Poli (Jam:Menit)</th>
+              <th colSpan={4}>Waktu Tunggu / Pelayanan (Menit)</th>
               <th rowSpan={2}>User Daftar</th>
             </tr>
             <tr>
-              {/* Kolom Pencatatan Waktu */}
-              <th>Tgl Registrasi</th>
-              <th>Tgl Terima Poli</th>
+              {/* Kolom Pencatatan Waktu (Farmasi Dihapus) */}
+              <th>Registrasi</th>
+              <th>Terima Poli</th>
               <th>Input Tindakan</th>
               <th>Input Asesmen</th>
               <th>Final Poli</th>
@@ -378,13 +375,13 @@ export default function LaporanAntreanPage() {
               <th>Tunggu Poli</th>
               <th>Tindakan</th>
               <th>Asesmen</th>
-              <th>Tunggu Pelayanan</th>
+              <th>Total Layanan Poli</th>
             </tr>
           </thead>
           <tbody>
             {filteredData.length === 0 ? (
               <tr>
-                <td colSpan={26} className="py-4">
+                <td colSpan={20} className="py-4">
                   Tidak ada data pasien pada filter ini.
                 </td>
               </tr>
@@ -417,9 +414,6 @@ export default function LaporanAntreanPage() {
                   <td>{formatTimeShort(item.tgl_input_tindakan)}</td>
                   <td>{formatTimeShort(item.tgl_input_asesmen)}</td>
                   <td>{formatTimeShort(item.tgl_final_poli)}</td>
-                  <td>{formatTimeShort(item.tgl_order_resep)}</td>
-                  <td>{formatTimeShort(item.tgl_masuk_farmasi)}</td>
-                  <td>{formatTimeShort(item.tgl_selesai_farmasi)}</td>
 
                   {/* Waktu Tunggu / Pelayanan */}
                   <td>
