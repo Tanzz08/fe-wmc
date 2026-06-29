@@ -214,7 +214,7 @@ function RekamMedisForm() {
                     </div>
 
                     <Select
-                      label="Unit Pelayanan (Poli Tujuan)"
+                      label="Ruang Rawat"
                       variant="bordered"
                       selectedKeys={getSafeKey(watch("ruang_rawat"))}
                       onSelectionChange={(keys) =>
@@ -224,20 +224,11 @@ function RekamMedisForm() {
                       <SelectItem key="Rawat Inap" value="Rawat Inap">
                         Rawat Inap
                       </SelectItem>
-                      <SelectItem key="Poli Umum" value="Poli Umum">
-                        Poli Umum
+                      <SelectItem key="UGD" value="UGD">
+                        UGD
                       </SelectItem>
-                      <SelectItem key="Poli Gigi" value="Poli Gigi">
-                        Poli Gigi
-                      </SelectItem>
-                      <SelectItem key="Poli Anak" value="Poli Anak">
-                        Poli Anak
-                      </SelectItem>
-                      <SelectItem key="Poli Obgyn" value="Poli Obgyn">
-                        Poli Obgyn
-                      </SelectItem>
-                      <SelectItem key="Poli Jiwa" value="Poli Jiwa">
-                        Poli Jiwa
+                      <SelectItem key="IGD" value="IGD">
+                        IGD
                       </SelectItem>
                     </Select>
 
