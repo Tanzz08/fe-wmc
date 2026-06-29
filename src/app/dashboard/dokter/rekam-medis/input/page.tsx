@@ -77,13 +77,12 @@ function RekamMedisForm() {
     handleSubmit,
     setValue,
     watch,
-    getValues, // <--- UNTUK MENARIK TEKS SECARA REAL-TIME
+    getValues,
     formState: { errors },
   } = useForm<RekamMedisFormData>({
     resolver: yupResolver(rekamMedisSchema) as any,
   });
 
-  // Tarik data Obat dari Database
   const { data: listObat = [] } = useQuery({
     queryKey: ["obatList"],
     queryFn: async () => {
@@ -96,7 +95,6 @@ function RekamMedisForm() {
     },
   });
 
-  // Mutasi untuk menyimpan Rekam Medis
   const mutation = useMutation({
     mutationFn: async (data: RekamMedisFormData) => {
       return await api.post("/rekam-medis", {
@@ -107,7 +105,7 @@ function RekamMedisForm() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["antreanDokter"] });
-      alert("Rekam Medis (Rekam Medis) berhasil disimpan dan dienkripsi!");
+      alert("Rekam Medis berhasil disimpan dan dienkripsi AES-256!");
       router.push("/dashboard/dokter/antrean");
     },
     onError: (error: any) => {
@@ -138,6 +136,12 @@ function RekamMedisForm() {
       </div>
     );
   }
+
+  // Trik Aman untuk Menangani SelectedKeys pada NextUI
+  // Jika watch mereturn undefined, kita ubah jadi string kosong lalu masukan ke Set
+  const getSafeKey = (value: string | undefined) => {
+    return value ? new Set([value]) : new Set([]);
+  };
 
   return (
     <div className="flex flex-col gap-6 max-w-5xl mx-auto">
@@ -208,21 +212,39 @@ function RekamMedisForm() {
                         />
                       </div>
                     </div>
-                    <Input
-                      {...register("ruang_rawat")}
-                      label="Ruang Rawat (Misal: Kelas II)"
-                      variant="bordered"
-                    />
 
                     <Select
-                      {...register("kondisi_keluar")}
+                      label="Unit Pelayanan (Poli Tujuan)"
+                      variant="bordered"
+                      selectedKeys={getSafeKey(watch("ruang_rawat"))}
+                      onSelectionChange={(keys) =>
+                        setValue("ruang_rawat", Array.from(keys)[0] as string)
+                      }
+                    >
+                      <SelectItem key="Rawat Inap" value="Rawat Inap">
+                        Rawat Inap
+                      </SelectItem>
+                      <SelectItem key="Poli Umum" value="Poli Umum">
+                        Poli Umum
+                      </SelectItem>
+                      <SelectItem key="Poli Gigi" value="Poli Gigi">
+                        Poli Gigi
+                      </SelectItem>
+                      <SelectItem key="Poli Anak" value="Poli Anak">
+                        Poli Anak
+                      </SelectItem>
+                      <SelectItem key="Poli Obgyn" value="Poli Obgyn">
+                        Poli Obgyn
+                      </SelectItem>
+                      <SelectItem key="Poli Jiwa" value="Poli Jiwa">
+                        Poli Jiwa
+                      </SelectItem>
+                    </Select>
+
+                    <Select
                       label="Kondisi Keluar"
                       variant="bordered"
-                      selectedKeys={
-                        watch("kondisi_keluar")
-                          ? [watch("kondisi_keluar")!]
-                          : []
-                      }
+                      selectedKeys={getSafeKey(watch("kondisi_keluar"))}
                       onSelectionChange={(keys) =>
                         setValue(
                           "kondisi_keluar",
@@ -245,12 +267,9 @@ function RekamMedisForm() {
                     </Select>
 
                     <Select
-                      {...register("cara_keluar")}
                       label="Cara Keluar / Tindak Lanjut"
                       variant="bordered"
-                      selectedKeys={
-                        watch("cara_keluar") ? [watch("cara_keluar")!] : []
-                      }
+                      selectedKeys={getSafeKey(watch("cara_keluar"))}
                       onSelectionChange={(keys) =>
                         setValue("cara_keluar", Array.from(keys)[0] as string)
                       }
@@ -305,12 +324,9 @@ function RekamMedisForm() {
                     </div>
 
                     <Select
-                      {...register("keadaan_umum")}
                       label="Keadaan Umum"
                       variant="bordered"
-                      selectedKeys={
-                        watch("keadaan_umum") ? [watch("keadaan_umum")!] : []
-                      }
+                      selectedKeys={getSafeKey(watch("keadaan_umum"))}
                       onSelectionChange={(keys) =>
                         setValue("keadaan_umum", Array.from(keys)[0] as string)
                       }
@@ -333,12 +349,9 @@ function RekamMedisForm() {
                     </Select>
 
                     <Select
-                      {...register("kesadaran")}
                       label="Kesadaran (GCS)"
                       variant="bordered"
-                      selectedKeys={
-                        watch("kesadaran") ? [watch("kesadaran")!] : []
-                      }
+                      selectedKeys={getSafeKey(watch("kesadaran"))}
                       onSelectionChange={(keys) =>
                         setValue("kesadaran", Array.from(keys)[0] as string)
                       }
@@ -361,12 +374,9 @@ function RekamMedisForm() {
                     </Select>
 
                     <Select
-                      {...register("skala_nyeri")}
                       label="Skala Nyeri (0-10)"
                       variant="bordered"
-                      selectedKeys={
-                        watch("skala_nyeri") ? [watch("skala_nyeri")!] : []
-                      }
+                      selectedKeys={getSafeKey(watch("skala_nyeri"))}
                       onSelectionChange={(keys) =>
                         setValue("skala_nyeri", Array.from(keys)[0] as string)
                       }
@@ -429,10 +439,9 @@ function RekamMedisForm() {
                         variant="bordered"
                       />
                       <Select
-                        {...register("alergi")}
                         label="Alergi"
                         variant="bordered"
-                        selectedKeys={watch("alergi") ? [watch("alergi")!] : []}
+                        selectedKeys={getSafeKey(watch("alergi"))}
                         onSelectionChange={(keys) =>
                           setValue("alergi", Array.from(keys)[0] as string)
                         }
@@ -454,20 +463,20 @@ function RekamMedisForm() {
                   </div>
 
                   <h3 className="font-semibold text-slate-700 border-b pb-2 mt-2">
-                    Pemeriksaan Penunjang Terpenting
+                    Pemeriksaan Penunjang Terpenting (Ekspertise)
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Textarea
                       {...register("laboratorium")}
-                      label="Laboratorium"
-                      placeholder="DR Terlampir"
+                      label="Kesimpulan Laboratorium"
+                      placeholder="Tuliskan nilai abnormal / kesimpulan lab..."
                       minRows={2}
                       variant="bordered"
                     />
                     <Textarea
                       {...register("radiologi")}
-                      label="Radiologi"
-                      placeholder="Foto Thoraks Terlampir"
+                      label="Ekspertise Radiologi"
+                      placeholder="Tuliskan ekspertise / bacaan foto..."
                       minRows={2}
                       variant="bordered"
                     />
@@ -538,7 +547,7 @@ function RekamMedisForm() {
                         variant="bordered"
                         color="success"
                         className="mb-1"
-                        selectedKeys={[]} // Selalu kosong agar bisa diklik berulang kali
+                        selectedKeys={new Set([])} // Selalu kosong agar bisa diklik berulang kali
                         onSelectionChange={(keys) => {
                           const obatTerpilih = Array.from(keys)[0] as string;
                           if (obatTerpilih) {
@@ -547,7 +556,6 @@ function RekamMedisForm() {
                             const teksBaru = teksSekarang
                               ? `${teksSekarang}\n- ${obatTerpilih} `
                               : `- ${obatTerpilih} `;
-
                             setValue("terapi_pengobatan", teksBaru, {
                               shouldValidate: true,
                               shouldDirty: true,
@@ -588,7 +596,7 @@ function RekamMedisForm() {
                       <Textarea
                         {...register("tindakan_prosedur")}
                         label="Tindakan / Prosedur"
-                        placeholder="Contoh: Hematologi Rutin, Pemasangan Infus..."
+                        placeholder="Contoh: Perawatan Luka, Pencabutan Gigi..."
                         minRows={2}
                         variant="bordered"
                       />
@@ -601,12 +609,9 @@ function RekamMedisForm() {
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <Select
-                      {...register("rencana_diet")}
                       label="Rencana Diet / Nutrisi"
                       variant="bordered"
-                      selectedKeys={
-                        watch("rencana_diet") ? [watch("rencana_diet")!] : []
-                      }
+                      selectedKeys={getSafeKey(watch("rencana_diet"))}
                       onSelectionChange={(keys) =>
                         setValue("rencana_diet", Array.from(keys)[0] as string)
                       }
@@ -624,6 +629,7 @@ function RekamMedisForm() {
                         Makanan Lunak / Cair
                       </SelectItem>
                     </Select>
+
                     <Textarea
                       {...register("edukasi")}
                       label="Edukasi Tambahan"
@@ -650,9 +656,7 @@ function RekamMedisForm() {
             type="submit"
             isLoading={mutation.isPending}
           >
-            {mutation.isPending
-              ? "Menyimpan Data..."
-              : "Simpan Rekam Medis"}
+            {mutation.isPending ? "Menyimpan Data..." : "Simpan Rekam Medis"}
           </Button>
         </div>
       </form>

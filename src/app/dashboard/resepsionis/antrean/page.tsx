@@ -487,14 +487,17 @@ export default function AntreanPage() {
                     isInvalid={!!errors.unit_pelayanan}
                     errorMessage={errors.unit_pelayanan?.message}
                   >
-                    <SelectItem key="Poli Umum" value="Poli Umum">
-                      Poli Umum
+                    <SelectItem key="Poli Obgyn" value="Poli Obgyn">
+                      Poli Obgyn
                     </SelectItem>
                     <SelectItem key="Poli Gigi" value="Poli Gigi">
                       Poli Gigi
                     </SelectItem>
-                    <SelectItem key="Poli KIA" value="Poli KIA">
-                      Poli KIA
+                    <SelectItem key="Poli Anak" value="Poli Anak">
+                      Poli Anak
+                    </SelectItem>
+                    <SelectItem key="Poli Jiwa" value="Poli Jiwa">
+                      Poli Jiwa
                     </SelectItem>
                   </Select>
 
