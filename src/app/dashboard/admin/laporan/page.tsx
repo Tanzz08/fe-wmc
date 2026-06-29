@@ -126,6 +126,10 @@ export default function LaporanAntreanPage() {
     return age + " Thn";
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   const resetFilter = () => {
     setStartDate("");
     setEndDate("");
