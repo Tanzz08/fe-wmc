@@ -21,7 +21,7 @@ import {
 import { Printer, Filter } from "lucide-react";
 import api from "@/lib/axios";
 
-// Interface disesuaikan dengan Skema Prisma (Hanya yang diperlukan)
+// Interface disesuaikan dengan Skema Prisma
 interface Antrean {
   nopen: string;
   id_rm: string;
@@ -33,15 +33,14 @@ interface Antrean {
   sub_unit?: string | null;
   status_antrean: string;
   tgl_registrasi: string;
+  tgl_terima_poli?: string | null;
+  tgl_final_poli?: string | null;
   user_daftar?: { username: string };
 }
 
 export default function LaporanAntreanPage() {
-  // State Filter Rentang Tanggal
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
-
-  // State Filter Lokasi
   const [filterInstalasi, setFilterInstalasi] = useState<string>("Semua");
   const [filterUnit, setFilterUnit] = useState<string>("Semua");
   const [filterSubUnit, setFilterSubUnit] = useState<string>("Semua");
@@ -57,9 +56,8 @@ export default function LaporanAntreanPage() {
     refetchOnWindowFocus: true,
   });
 
-  // Filter Logic Bertingkat
+  // Filter Logic
   const filteredData = listAntrean.filter((item) => {
-    // 1. Filter Tanggal
     const itemDate = new Date(item.tgl_registrasi).toISOString().split("T")[0];
     let matchDate = true;
     if (startDate && !endDate) matchDate = itemDate >= startDate;
@@ -67,7 +65,6 @@ export default function LaporanAntreanPage() {
     else if (startDate && endDate)
       matchDate = itemDate >= startDate && itemDate <= endDate;
 
-    // 2. Filter Lokasi
     const matchInstalasi =
       filterInstalasi === "Semua" || item.instalasi === filterInstalasi;
     const matchUnit =
@@ -79,7 +76,7 @@ export default function LaporanAntreanPage() {
     return matchDate && matchInstalasi && matchUnit && matchSubUnit;
   });
 
-  // Helper: Format Tanggal & Jam (Untuk Web & Cetak)
+  // Helper Functions
   const formatDateTime = (dateString?: string | null) => {
     if (!dateString) return "-";
     const date = new Date(dateString);
@@ -90,14 +87,10 @@ export default function LaporanAntreanPage() {
         year: "numeric",
       }) +
       " " +
-      date.toLocaleTimeString("id-ID", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+      date.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
     );
   };
 
-  // Helper: Format Tanggal Saja (Untuk Info Header Print)
   const formatDateOnly = (dateString?: string | null) => {
     if (!dateString) return "-";
     return new Date(dateString).toLocaleDateString("id-ID", {
@@ -107,28 +100,32 @@ export default function LaporanAntreanPage() {
     });
   };
 
-  // Helper: Hitung Umur (Gunakan parameter untuk waktu saat ini)
   const calculateAge = (dobString?: string) => {
     if (!dobString) return "-";
-
-    // Kita buat referensi waktu "sekarang" di dalam fungsi
-    // agar lebih terkontrol dan tidak dipanggil terus menerus saat render
     const now = new Date();
     const dob = new Date(dobString);
-
     let age = now.getFullYear() - dob.getFullYear();
     const monthDiff = now.getMonth() - dob.getMonth();
-
-    if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate())) {
+    if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate()))
       age--;
-    }
-
     return age + " Thn";
   };
 
-  const handlePrint = () => {
-    window.print();
+  const calculateSLAText = (start?: string | null, end?: string | null) => {
+    if (!start || !end) return "-";
+    const diffMs = new Date(end).getTime() - new Date(start).getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    return diffMins >= 0 ? `${diffMins} Menit` : "0 Menit";
   };
+
+  const calculateSLAMins = (start?: string | null, end?: string | null) => {
+    if (!start || !end) return "-";
+    const diffMs = new Date(end).getTime() - new Date(start).getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    return diffMins >= 0 ? diffMins : 0;
+  };
+
+  const handlePrint = () => window.print();
 
   const resetFilter = () => {
     setStartDate("");
@@ -140,7 +137,6 @@ export default function LaporanAntreanPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* 1. BAGIAN HEADER & FILTER (DISEMBUNYIKAN SAAT CETAK PDF) */}
       <div className="print:hidden flex flex-col gap-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -148,8 +144,7 @@ export default function LaporanAntreanPage() {
               Laporan Riwayat Kunjungan
             </h1>
             <p className="text-sm text-slate-500">
-              Filter dan cetak arsip kunjungan pasien berdasarkan periode dan
-              unit pelayanan.
+              Filter dan cetak arsip kunjungan pasien.
             </p>
           </div>
           <Button
@@ -193,9 +188,6 @@ export default function LaporanAntreanPage() {
               <SelectItem key="Rawat Jalan" value="Rawat Jalan">
                 Rawat Jalan
               </SelectItem>
-              <SelectItem key="UGD" value="UGD">
-                UGD
-              </SelectItem>
             </Select>
             <Select
               label="Unit Pelayanan"
@@ -213,9 +205,6 @@ export default function LaporanAntreanPage() {
               <SelectItem key="Poli Gigi" value="Poli Gigi">
                 Poli Gigi
               </SelectItem>
-              <SelectItem key="Poli KIA" value="Poli KIA">
-                Poli KIA
-              </SelectItem>
               <SelectItem key="Poli Anak" value="Poli Anak">
                 Poli Anak
               </SelectItem>
@@ -227,7 +216,7 @@ export default function LaporanAntreanPage() {
               </SelectItem>
             </Select>
             <Input
-              label="Sub Unit (Ops)"
+              label="Sub Unit"
               placeholder="Ketik..."
               variant="bordered"
               labelPlacement="outside"
@@ -247,7 +236,6 @@ export default function LaporanAntreanPage() {
         </Card>
       </div>
 
-      {/* 2. TABEL VERSI UI WEB (NEXTUI) */}
       <div className="print:hidden">
         <Table
           aria-label="Tabel Laporan Kunjungan"
@@ -257,54 +245,38 @@ export default function LaporanAntreanPage() {
             <TableColumn>WAKTU KUNJUNGAN</TableColumn>
             <TableColumn>NOPEN / PASIEN</TableColumn>
             <TableColumn>UNIT PELAYANAN</TableColumn>
+            <TableColumn>WAKTU TUNGGU</TableColumn>
+            <TableColumn>LAMA LAYANAN</TableColumn>
             <TableColumn>CARA BAYAR</TableColumn>
-            <TableColumn>STATUS</TableColumn>
           </TableHeader>
           <TableBody
-            emptyContent={
-              isLoading ? (
-                <Spinner />
-              ) : (
-                "Tidak ada data kunjungan sesuai filter."
-              )
-            }
             items={filteredData}
+            emptyContent={isLoading ? <Spinner /> : "Tidak ada data."}
           >
             {(item) => (
               <TableRow key={item.nopen}>
-                <TableCell className="font-medium whitespace-nowrap">
-                  {formatDateTime(item.tgl_registrasi)}
-                </TableCell>
+                <TableCell>{formatDateTime(item.tgl_registrasi)}</TableCell>
                 <TableCell>
                   <span className="block font-bold">{item.nopen}</span>
                   <span className="text-xs text-slate-500 uppercase">
-                    {item.pasien?.nama} ({item.id_rm})
+                    {item.pasien?.nama}
+                  </span>
+                  <span className="text-xs block text-slate-400">
+                    Umur: {calculateAge(item.pasien?.tanggal_lahir)}
                   </span>
                 </TableCell>
                 <TableCell>
-                  <span className="block text-xs text-slate-500">
-                    {item.instalasi}
-                  </span>
                   <span className="font-semibold">{item.unit_pelayanan}</span>
                 </TableCell>
-                <TableCell>
-                  <Chip
-                    size="sm"
-                    variant="flat"
-                    color={item.cara_bayar === "BPJS" ? "success" : "default"}
-                  >
-                    {item.cara_bayar}
-                  </Chip>
+                <TableCell className="text-amber-700 font-medium">
+                  {calculateSLAText(item.tgl_registrasi, item.tgl_terima_poli)}
+                </TableCell>
+                <TableCell className="text-emerald-700 font-medium">
+                  {calculateSLAText(item.tgl_terima_poli, item.tgl_final_poli)}
                 </TableCell>
                 <TableCell>
-                  <Chip
-                    size="sm"
-                    variant="dot"
-                    color={
-                      item.status_antrean === "SELESAI" ? "primary" : "warning"
-                    }
-                  >
-                    {item.status_antrean.replace("_", " ")}
+                  <Chip size="sm" variant="flat">
+                    {item.cara_bayar}
                   </Chip>
                 </TableCell>
               </TableRow>
@@ -313,82 +285,62 @@ export default function LaporanAntreanPage() {
         </Table>
       </div>
 
-      {/* 3. TABEL VERSI CETAK PDF (LEBIH SEDERHANA & BERSIH) */}
       <div className="hidden print:block print:w-full print:bg-white print:absolute print:top-0 print:left-0 print:z-[99999]">
-        <style type="text/css">
-          {`
-            @media print {
-              @page { size: portrait; margin: 10mm; }
-              body { background-color: white !important; font-family: Arial, sans-serif; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-              aside, nav, header { display: none !important; }
-              table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-              th, td { border: 1px solid #000; padding: 6px 8px; font-size: 11px; text-align: center; word-wrap: break-word; }
-              th { background-color: #f1f5f9 !important; font-weight: bold; }
-              .text-left { text-align: left; }
-            }
-          `}
-        </style>
-
+        <style type="text/css">{`
+          @media print {
+            @page { size: portrait; margin: 10mm; }
+            table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+            th, td { border: 1px solid #000; padding: 6px 8px; font-size: 11px; text-align: center; }
+            th { background-color: #f1f5f9 !important; font-weight: bold; }
+            .text-left { text-align: left; }
+          }
+        `}</style>
         <div className="text-center mb-6 border-b-2 border-slate-800 pb-4">
-          <h2 className="text-lg font-bold uppercase mb-1">
+          <h2 className="text-lg font-bold uppercase">
             Laporan Riwayat Kunjungan Pasien
           </h2>
           <p className="text-sm font-semibold">
             KLINIK WIHDATUL UMMAH MEDICAL CENTER
           </p>
-          <p className="text-xs mt-1">
+          <p className="text-xs">
             Periode: {startDate ? formatDateOnly(startDate) : "Semua"} s.d{" "}
             {endDate ? formatDateOnly(endDate) : "Sekarang"}
           </p>
-          <p className="text-xs">
-            Filter: {filterInstalasi} | {filterUnit}
-          </p>
         </div>
-
         <table>
           <thead>
             <tr>
-              <th className="w-8">No.</th>
-              <th>Waktu Kunjungan</th>
+              <th>No.</th>
+              <th>Waktu</th>
               <th>No. RM</th>
-              <th>No. Pendafaran</th>
+              <th>NOPEN</th>
               <th>Nama Pasien</th>
-              <th>L/P</th>
-              <th>Umur</th>
-              <th>Unit Pelayanan</th>
-              <th>Pasien</th>
-              <th>Cara Bayar</th>
+              <th>Unit</th>
+              <th>Tunggu (Mnt)</th>
+              <th>Layanan (Mnt)</th>
+              <th>Bayar</th>
               <th>Petugas</th>
             </tr>
           </thead>
           <tbody>
-            {filteredData.length === 0 ? (
-              <tr>
-                <td colSpan={11} className="py-4">
-                  Tidak ada data kunjungan pada filter ini.
+            {filteredData.map((item, index) => (
+              <tr key={item.nopen}>
+                <td>{index + 1}</td>
+                <td>{formatDateTime(item.tgl_registrasi)}</td>
+                <td>{item.id_rm}</td>
+                <td>{item.nopen}</td>
+                <td className="text-left uppercase">{item.pasien?.nama}</td>
+                <td>{item.unit_pelayanan}</td>
+                <td>
+                  {calculateSLAMins(item.tgl_registrasi, item.tgl_terima_poli)}
                 </td>
+                <td>
+                  {calculateSLAMins(item.tgl_terima_poli, item.tgl_final_poli)}
+                </td>
+                <td>{item.cara_bayar}</td>
+                <td>{item.user_daftar?.username}</td>
               </tr>
-            ) : (
-              filteredData.map((item, index) => (
-                <tr key={item.nopen}>
-                  <td>{index + 1}</td>
-                  <td>{formatDateTime(item.tgl_registrasi)}</td>
-                  <td>{item.id_rm}</td>
-                  <td>{item.nopen}</td>
-                  <td className="text-left font-semibold uppercase">
-                    {item.pasien?.nama}
-                  </td>
-                  <td>
-                    {item.pasien?.jenis_kelamin === "Laki-laki" ? "L" : "P"}
-                  </td>
-                  <td>{calculateAge(item.pasien?.tanggal_lahir)}</td>
-                  <td>{item.unit_pelayanan}</td>
-                  <td>{item.status_pasien}</td>
-                  <td>{item.cara_bayar}</td>
-                  <td>{item.user_daftar?.username}</td>
-                </tr>
-              ))
-            )}
+            ))}
           </tbody>
         </table>
       </div>
