@@ -120,6 +120,15 @@ function RekamMedisForm() {
     mutation.mutate(data);
   };
 
+  const onValidationError = (errors: any) => {
+    setGlobalError(
+      "Gagal menyimpan: Harap periksa kembali form Anda. Ada field wajib yang belum diisi!",
+    );
+
+    // Opsional: Jika kamu ingin melihat field apa saja yang error di console
+    console.log("Error Validasi:", errors);
+  };
+
   if (!nopen || !id_rm) {
     return (
       <div className="flex flex-col items-center justify-center p-10 text-center border border-red-200 bg-red-50 rounded-xl max-w-lg mx-auto mt-10">
@@ -167,7 +176,7 @@ function RekamMedisForm() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)}>
+      <form onSubmit={handleSubmit(onSubmit, onValidationError)}>
         <Card className="shadow-sm border border-slate-200">
           <CardBody className="p-0">
             <Tabs
