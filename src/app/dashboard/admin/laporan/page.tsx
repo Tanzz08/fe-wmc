@@ -16,11 +16,12 @@ import {
   Card,
   CardBody,
   Spinner,
+  Chip,
 } from "@nextui-org/react";
 import { Printer, Filter } from "lucide-react";
 import api from "@/lib/axios";
 
-// Interface disesuaikan dengan Skema Prisma
+// Interface disesuaikan dengan Skema Prisma (Hanya yang diperlukan)
 interface Antrean {
   nopen: string;
   id_rm: string;
@@ -31,12 +32,7 @@ interface Antrean {
   unit_pelayanan: string;
   sub_unit?: string | null;
   status_antrean: string;
-  // Kolom Waktu
   tgl_registrasi: string;
-  tgl_terima_poli?: string | null;
-  tgl_input_asesmen?: string | null;
-  tgl_input_tindakan?: string | null;
-  tgl_final_poli?: string | null;
   user_daftar?: { username: string };
 }
 
@@ -51,18 +47,17 @@ export default function LaporanAntreanPage() {
   const [filterSubUnit, setFilterSubUnit] = useState<string>("Semua");
 
   const { data: listAntrean = [], isLoading } = useQuery<Antrean[]>({
-    queryKey: ["laporanAntreanList"],
+    queryKey: ["laporanKunjunganList"],
     queryFn: async () => {
       const res = await api.get("/antrean");
       const fetchedData = res.data?.data || res.data;
       return Array.isArray(fetchedData) ? fetchedData : [];
     },
-    // Refresh otomatis
     refetchInterval: 3000,
     refetchOnWindowFocus: true,
   });
 
-  // Filter Logic Bertingkat (Dengan Rentang Tanggal)
+  // Filter Logic Bertingkat
   const filteredData = listAntrean.filter((item) => {
     // 1. Filter Tanggal
     const itemDate = new Date(item.tgl_registrasi).toISOString().split("T")[0];
@@ -84,61 +79,51 @@ export default function LaporanAntreanPage() {
     return matchDate && matchInstalasi && matchUnit && matchSubUnit;
   });
 
-  // Helper: Format Waktu (Jam:Menit:Detik) - Untuk Web
-  const formatTimeFull = (dateString?: string | null) => {
+  // Helper: Format Tanggal & Jam (Untuk Web & Cetak)
+  const formatDateTime = (dateString?: string | null) => {
     if (!dateString) return "-";
-    return new Date(dateString).toLocaleTimeString("id-ID", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
+    const date = new Date(dateString);
+    return (
+      date.toLocaleDateString("id-ID", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }) +
+      " " +
+      date.toLocaleTimeString("id-ID", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    );
   };
 
-  // Helper: Format Jam Saja (Jam:Menit) - Untuk Cetak biar lebih ringkas
-  const formatTimeShort = (dateString?: string | null) => {
-    if (!dateString) return "-";
-    return new Date(dateString).toLocaleTimeString("id-ID", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  // Helper: Format Tanggal Saja (Untuk Tabel)
+  // Helper: Format Tanggal Saja (Untuk Info Header Print)
   const formatDateOnly = (dateString?: string | null) => {
     if (!dateString) return "-";
     return new Date(dateString).toLocaleDateString("id-ID", {
       day: "2-digit",
-      month: "short",
+      month: "long",
       year: "numeric",
     });
   };
 
-  // Helper: Hitung Umur
+  // Helper: Hitung Umur (Gunakan parameter untuk waktu saat ini)
   const calculateAge = (dobString?: string) => {
     if (!dobString) return "-";
-    const diffMs = Date.now() - new Date(dobString).getTime();
-    const ageDt = new Date(diffMs);
-    return Math.abs(ageDt.getUTCFullYear() - 1970) + " Thn";
-  };
 
-  // Helper: Hitung Durasi SLA dalam Menit (Teks)
-  const calculateSLAText = (start?: string | null, end?: string | null) => {
-    if (!start || !end) return "-";
-    const diffMs = new Date(end).getTime() - new Date(start).getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    return diffMins >= 0 ? `${diffMins} Menit` : "0 Menit";
-  };
+    // Kita buat referensi waktu "sekarang" di dalam fungsi
+    // agar lebih terkontrol dan tidak dipanggil terus menerus saat render
+    const now = new Date();
+    const dob = new Date(dobString);
 
-  // Helper: Hitung Durasi SLA dalam Menit (Angka saja untuk Cetak)
-  const calculateSLAMins = (start?: string | null, end?: string | null) => {
-    if (!start || !end) return "-";
-    const diffMs = new Date(end).getTime() - new Date(start).getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    return diffMins >= 0 ? diffMins : 0;
-  };
+    let age = now.getFullYear() - dob.getFullYear();
+    const monthDiff = now.getMonth() - dob.getMonth();
 
-  const handlePrint = () => {
-    window.print();
+    if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate())) {
+      age--;
+    }
+
+    return age + " Thn";
   };
 
   const resetFilter = () => {
@@ -156,11 +141,11 @@ export default function LaporanAntreanPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-800">
-              Laporan Mutu Pelayanan
+              Laporan Riwayat Kunjungan
             </h1>
             <p className="text-sm text-slate-500">
-              Filter dan cetak rekapitulasi waktu tunggu pasien berdasarkan
-              periode.
+              Filter dan cetak arsip kunjungan pasien berdasarkan periode dan
+              unit pelayanan.
             </p>
           </div>
           <Button
@@ -169,7 +154,7 @@ export default function LaporanAntreanPage() {
             startContent={<Printer size={18} />}
             className="shadow-md font-bold"
           >
-            Cetak Register (PDF)
+            Cetak Laporan (PDF)
           </Button>
         </div>
 
@@ -227,6 +212,15 @@ export default function LaporanAntreanPage() {
               <SelectItem key="Poli KIA" value="Poli KIA">
                 Poli KIA
               </SelectItem>
+              <SelectItem key="Poli Anak" value="Poli Anak">
+                Poli Anak
+              </SelectItem>
+              <SelectItem key="Poli Obgyn" value="Poli Obgyn">
+                Poli Obgyn
+              </SelectItem>
+              <SelectItem key="Poli Jiwa" value="Poli Jiwa">
+                Poli Jiwa
+              </SelectItem>
             </Select>
             <Input
               label="Sub Unit (Ops)"
@@ -249,34 +243,33 @@ export default function LaporanAntreanPage() {
         </Card>
       </div>
 
-      {/* 2. TABEL VERSI UI WEB (NEXTUI) - TETAP RINGKAS */}
+      {/* 2. TABEL VERSI UI WEB (NEXTUI) */}
       <div className="print:hidden">
         <Table
-          aria-label="Tabel Laporan"
+          aria-label="Tabel Laporan Kunjungan"
           className="shadow-sm border border-slate-200"
         >
           <TableHeader>
-            <TableColumn>TANGGAL</TableColumn>
+            <TableColumn>WAKTU KUNJUNGAN</TableColumn>
             <TableColumn>NOPEN / PASIEN</TableColumn>
-            <TableColumn>LOKASI PELAYANAN</TableColumn>
-            <TableColumn>DAFTAR ➔ DILAYANI</TableColumn>
-            <TableColumn className="bg-amber-50 text-amber-800">
-              WAKTU TUNGGU
-            </TableColumn>
-            <TableColumn className="bg-emerald-50 text-emerald-800">
-              LAMA LAYANAN
-            </TableColumn>
+            <TableColumn>UNIT PELAYANAN</TableColumn>
+            <TableColumn>CARA BAYAR</TableColumn>
+            <TableColumn>STATUS</TableColumn>
           </TableHeader>
           <TableBody
             emptyContent={
-              isLoading ? <Spinner /> : "Tidak ada data sesuai filter."
+              isLoading ? (
+                <Spinner />
+              ) : (
+                "Tidak ada data kunjungan sesuai filter."
+              )
             }
             items={filteredData}
           >
             {(item) => (
               <TableRow key={item.nopen}>
                 <TableCell className="font-medium whitespace-nowrap">
-                  {formatDateOnly(item.tgl_registrasi)}
+                  {formatDateTime(item.tgl_registrasi)}
                 </TableCell>
                 <TableCell>
                   <span className="block font-bold">{item.nopen}</span>
@@ -289,25 +282,26 @@ export default function LaporanAntreanPage() {
                     {item.instalasi}
                   </span>
                   <span className="font-semibold">{item.unit_pelayanan}</span>
-                  {item.sub_unit && (
-                    <span className="block text-xs italic">
-                      - {item.sub_unit}
-                    </span>
-                  )}
                 </TableCell>
-                <TableCell className="font-mono text-sm">
-                  {formatTimeFull(item.tgl_registrasi)} ➔{" "}
-                  {formatTimeFull(item.tgl_terima_poli)}
+                <TableCell>
+                  <Chip
+                    size="sm"
+                    variant="flat"
+                    color={item.cara_bayar === "BPJS" ? "success" : "default"}
+                  >
+                    {item.cara_bayar}
+                  </Chip>
                 </TableCell>
-
-                {/* WAKTU TUNGGU: Daftar -> Terima Poli */}
-                <TableCell className="bg-amber-50 font-bold text-amber-700">
-                  {calculateSLAText(item.tgl_registrasi, item.tgl_terima_poli)}
-                </TableCell>
-
-                {/* LAMA LAYANAN: Terima Poli -> Selesai Poli */}
-                <TableCell className="bg-emerald-50 font-bold text-emerald-700">
-                  {calculateSLAText(item.tgl_terima_poli, item.tgl_final_poli)}
+                <TableCell>
+                  <Chip
+                    size="sm"
+                    variant="dot"
+                    color={
+                      item.status_antrean === "SELESAI" ? "primary" : "warning"
+                    }
+                  >
+                    {item.status_antrean.replace("_", " ")}
+                  </Chip>
                 </TableCell>
               </TableRow>
             )}
@@ -315,80 +309,66 @@ export default function LaporanAntreanPage() {
         </Table>
       </div>
 
-      {/* 3. TABEL VERSI CETAK PDF (RAW HTML - LEDGER STYLE KEMENKES LENGKAP) */}
+      {/* 3. TABEL VERSI CETAK PDF (LEBIH SEDERHANA & BERSIH) */}
       <div className="hidden print:block print:w-full print:bg-white print:absolute print:top-0 print:left-0 print:z-[99999]">
         <style type="text/css">
           {`
             @media print {
-              @page { size: landscape; margin: 5mm; }
+              @page { size: portrait; margin: 10mm; }
               body { background-color: white !important; font-family: Arial, sans-serif; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
               aside, nav, header { display: none !important; }
-              table { width: 100%; border-collapse: collapse; }
-              th, td { border: 1px solid #000; padding: 4px 6px; font-size: 8px; text-align: center; word-wrap: break-word; }
+              table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+              th, td { border: 1px solid #000; padding: 6px 8px; font-size: 11px; text-align: center; word-wrap: break-word; }
               th { background-color: #f1f5f9 !important; font-weight: bold; }
               .text-left { text-align: left; }
             }
           `}
         </style>
 
-        <div className="text-center mb-4">
-          <h2 className="text-base font-bold uppercase mb-1">
-            Laporan Register Antrean Pasien & Indikator Mutu Nasional (INM)
+        <div className="text-center mb-6 border-b-2 border-slate-800 pb-4">
+          <h2 className="text-lg font-bold uppercase mb-1">
+            Laporan Riwayat Kunjungan Pasien
           </h2>
-          <p className="text-sm font-semibold">WIHDATUL UMMAH MEDICAL CENTER</p>
-          <p className="text-xs mt-1 pb-2 border-b-2 border-black">
-            Periode: {startDate ? formatDateOnly(startDate) : "Awal"} s.d{" "}
-            {endDate ? formatDateOnly(endDate) : "Akhir"}
-            {" | "} Instalasi: {filterInstalasi} | Unit: {filterUnit}
-            {filterSubUnit !== "Semua" ? ` | Sub Unit: ${filterSubUnit}` : ""}
+          <p className="text-sm font-semibold">
+            KLINIK WIHDATUL UMMAH MEDICAL CENTER
+          </p>
+          <p className="text-xs mt-1">
+            Periode: {startDate ? formatDateOnly(startDate) : "Semua"} s.d{" "}
+            {endDate ? formatDateOnly(endDate) : "Sekarang"}
+          </p>
+          <p className="text-xs">
+            Filter: {filterInstalasi} | {filterUnit}
           </p>
         </div>
 
         <table>
           <thead>
             <tr>
-              <th rowSpan={2} className="w-6">
-                No.
-              </th>
-              <th rowSpan={2}>No. RM</th>
-              <th rowSpan={2}>NOPEN</th>
-              <th rowSpan={2}>Nama Pasien</th>
-              <th rowSpan={2}>JK</th>
-              <th rowSpan={2}>Tgl Lahir/Umur</th>
-              <th rowSpan={2}>Status</th>
-              <th rowSpan={2}>Instalasi</th>
-              <th rowSpan={2}>Unit Pelayanan</th>
-              <th rowSpan={2}>Cara Bayar</th>
-              <th colSpan={5}>Pencatatan Waktu Pelayanan Poli (Jam:Menit)</th>
-              <th colSpan={4}>Waktu Tunggu / Pelayanan (Menit)</th>
-              <th rowSpan={2}>User Daftar</th>
-            </tr>
-            <tr>
-              {/* Kolom Pencatatan Waktu (Farmasi Dihapus) */}
-              <th>Registrasi</th>
-              <th>Terima Poli</th>
-              <th>Input Tindakan</th>
-              <th>Input Asesmen</th>
-              <th>Final Poli</th>
-
-              {/* Kolom Waktu Tunggu */}
-              <th>Tunggu Poli</th>
-              <th>Tindakan</th>
-              <th>Asesmen</th>
-              <th>Total Layanan Poli</th>
+              <th className="w-8">No.</th>
+              <th>Waktu Kunjungan</th>
+              <th>No. RM</th>
+              <th>No. Pendafaran</th>
+              <th>Nama Pasien</th>
+              <th>L/P</th>
+              <th>Umur</th>
+              <th>Unit Pelayanan</th>
+              <th>Pasien</th>
+              <th>Cara Bayar</th>
+              <th>Petugas</th>
             </tr>
           </thead>
           <tbody>
             {filteredData.length === 0 ? (
               <tr>
-                <td colSpan={20} className="py-4">
-                  Tidak ada data pasien pada filter ini.
+                <td colSpan={11} className="py-4">
+                  Tidak ada data kunjungan pada filter ini.
                 </td>
               </tr>
             ) : (
               filteredData.map((item, index) => (
                 <tr key={item.nopen}>
                   <td>{index + 1}</td>
+                  <td>{formatDateTime(item.tgl_registrasi)}</td>
                   <td>{item.id_rm}</td>
                   <td>{item.nopen}</td>
                   <td className="text-left font-semibold uppercase">
@@ -397,47 +377,10 @@ export default function LaporanAntreanPage() {
                   <td>
                     {item.pasien?.jenis_kelamin === "Laki-laki" ? "L" : "P"}
                   </td>
-                  <td>
-                    {item.pasien?.tanggal_lahir
-                      ? formatDateOnly(item.pasien.tanggal_lahir)
-                      : "-"}{" "}
-                    / {calculateAge(item.pasien?.tanggal_lahir)}
-                  </td>
-                  <td>{item.status_pasien}</td>
-                  <td>{item.instalasi}</td>
+                  <td>{calculateAge(item.pasien?.tanggal_lahir)}</td>
                   <td>{item.unit_pelayanan}</td>
+                  <td>{item.status_pasien}</td>
                   <td>{item.cara_bayar}</td>
-
-                  {/* Pencatatan Waktu */}
-                  <td>{formatTimeShort(item.tgl_registrasi)}</td>
-                  <td>{formatTimeShort(item.tgl_terima_poli)}</td>
-                  <td>{formatTimeShort(item.tgl_input_tindakan)}</td>
-                  <td>{formatTimeShort(item.tgl_input_asesmen)}</td>
-                  <td>{formatTimeShort(item.tgl_final_poli)}</td>
-
-                  {/* Waktu Tunggu / Pelayanan */}
-                  <td>
-                    {calculateSLAMins(
-                      item.tgl_registrasi,
-                      item.tgl_terima_poli,
-                    )}
-                  </td>
-                  <td>
-                    {calculateSLAMins(
-                      item.tgl_terima_poli,
-                      item.tgl_input_tindakan,
-                    )}
-                  </td>
-                  <td>
-                    {calculateSLAMins(
-                      item.tgl_terima_poli,
-                      item.tgl_input_asesmen,
-                    )}
-                  </td>
-                  <td>
-                    {calculateSLAMins(item.tgl_registrasi, item.tgl_final_poli)}
-                  </td>
-
                   <td>{item.user_daftar?.username}</td>
                 </tr>
               ))
