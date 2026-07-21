@@ -1,18 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useSession } from "next-auth/react";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import {
+  Card,
+  CardBody,
+  Input,
+  Button,
   Table,
   TableHeader,
   TableColumn,
   TableBody,
   TableRow,
   TableCell,
-  Button,
-  Input,
   Modal,
   ModalContent,
   ModalHeader,
@@ -24,8 +24,6 @@ import {
   Accordion,
   AccordionItem,
   Divider,
-  Card,
-  CardBody,
 } from "@nextui-org/react";
 import {
   Archive,
@@ -50,106 +48,69 @@ interface Pasien {
   tanggal_lahir: string;
   no_telepon: string;
   alamat: string;
-  key?: string; // 🔥 TAMBAHAN: Dibutuhkan oleh NextUI Table
 }
 
 interface RekamMedis {
   id_pemeriksaan: number;
   nopen: string;
-  id_rm: string;
   waktu_periksa: string;
   tensi_darah: string;
   nadi: string;
   suhu: string;
   keadaan_umum: string;
   diagnosis_utama: string;
-  icd10_utama?: string;
-  diagnosis_sekunder?: string;
-  icd10_sekunder?: string;
   terapi_pengobatan: string;
-  rencana_diet?: string;
-  edukasi?: string;
   dokter: {
     username: string;
   };
-  pasien: Pasien;
-  safeKey?: string;
 }
 
-export default function ArsipRekamMedisDokterPage() {
-  const router = useRouter();
-  const { isOpen, onOpen, onOpenChange } = useDisclosure();
+interface DetailPasien extends Pasien {
+  rekamMedis: RekamMedis[];
+}
 
+export default function ArsipRekamMedisPage() {
+  const { isOpen, onOpen, onOpenChange } = useDisclosure();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRm, setSelectedRm] = useState<string | null>(null);
 
   // =========================================================================
-  // 2. DETEKSI USER LOGIN MENGGUNAKAN NEXT-AUTH
+  // 2. FETCH DATA DAFTAR PASIEN
   // =========================================================================
-  const { data: session, status } = useSession();
-
-  const isAuthLoading = status === "loading";
-
-  const currentUsername =
-    (session?.user as any)?.username ||
-    session?.user?.name ||
-    session?.user?.email;
-
-  // =========================================================================
-  // 3. FETCH DATA & FILTER DINAMIS SESUAI USERNAME DOKTER
-  // =========================================================================
-  const { data: listRM = [], isLoading } = useQuery<RekamMedis[]>({
-    queryKey: ["rekamMedisDokterDinamis", currentUsername],
-    enabled: !isAuthLoading && !!currentUsername,
+  const { data: listPasien = [], isLoading: loadingDaftar } = useQuery<
+    Pasien[]
+  >({
+    queryKey: ["pasienListArsip"],
     queryFn: async () => {
       try {
-        const res = await api.get("/rekam-medis");
-        const fetchedData = res.data?.data || res.data;
-        const safeData = Array.isArray(fetchedData) ? fetchedData : [];
-
-        return safeData.map((item: any, index: number) => ({
-          ...item,
-          safeKey: item.nopen || `fallback-rm-${index}`,
-        }));
+        const res = await api.get("/pasien");
+        return Array.isArray(res.data?.data) ? res.data.data : [];
       } catch (error) {
-        console.error("Gagal menarik data arsip rekam medis", error);
+        console.error("Gagal menarik data pasien", error);
         return [];
       }
     },
   });
 
-  // Filter rekam medis berdasarkan username dari NextAuth
-  const filteredByDoctor = listRM.filter((rm) => {
-    if (!currentUsername) return false;
-    return rm.dokter?.username?.toLowerCase() === currentUsername.toLowerCase();
-  });
-
-  // Ekstrak data Pasien unik dari riwayat Rekam Medis dokter ini
-  const uniquePatientsMap = new Map<string, Pasien>();
-  filteredByDoctor.forEach((rm) => {
-    if (rm.pasien && !uniquePatientsMap.has(rm.id_rm)) {
-      uniquePatientsMap.set(rm.id_rm, rm.pasien);
-    }
-  });
-
-  // 🔥 PERBAIKAN BUG: Menambahkan properti "key" secara manual agar NextUI Table tidak error
-  const listPasien = Array.from(uniquePatientsMap.values()).map((p) => ({
-    ...p,
-    key: p.id_rm,
-  }));
-
-  // Filter pencarian untuk tabel daftar pasien
   const filteredPasien = listPasien.filter(
     (p) =>
       p.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (p.id_rm && p.id_rm.toLowerCase().includes(searchQuery.toLowerCase())),
   );
 
-  // Filter histori spesifik untuk pasien yang diklik (di dalam Modal)
-  const patientRmHistory = filteredByDoctor.filter(
-    (rm) => rm.id_rm === selectedRm,
-  );
-  const detailPasien = listPasien.find((p) => p.id_rm === selectedRm);
+  // =========================================================================
+  // 3. FETCH DETAIL & RIWAYAT REKAM MEDIS PASIEN (Saat Modal Dibuka)
+  // =========================================================================
+  const { data: detailPasien, isLoading: loadingDetail } =
+    useQuery<DetailPasien>({
+      queryKey: ["pasienDetailRM", selectedRm],
+      queryFn: async () => {
+        const res = await api.get(`/pasien/${selectedRm}`);
+        return res.data?.data;
+      },
+      // Query ini HANYA berjalan jika ada pasien yang dipilih (selectedRm tidak null)
+      enabled: !!selectedRm,
+    });
 
   const handleBukaRiwayat = (id_rm: string) => {
     setSelectedRm(id_rm);
@@ -166,26 +127,22 @@ export default function ArsipRekamMedisDokterPage() {
         <Archive className="text-klinik-blue" size={28} />
         <div>
           <h1 className="text-2xl font-bold text-slate-800">
-            Arsip Rekam Medis Pasien Saya
+            Arsip Rekam Medis
           </h1>
           <p className="text-sm text-slate-500">
-            Menampilkan histori rekam medis yang diperiksa oleh akun:{" "}
-            <span className="font-bold text-klinik-blue uppercase">
-              {isAuthLoading
-                ? "Memverifikasi sesi..."
-                : currentUsername || "Sesi Kedaluwarsa"}
-            </span>
+            Pusat penelusuran histori rekam medis elektronik pasien
+            (Terdekripsi).
           </p>
         </div>
       </div>
 
       {/* PENCARIAN */}
-      <Card className="shadow-sm border border-slate-100">
+      <Card className="shadow-sm">
         <CardBody>
           <Input
             isClearable
             className="w-full sm:max-w-md"
-            placeholder="Cari Pasien (Nama atau ID RM)..."
+            placeholder="Cari Rekam Medis (Nama atau ID RM)..."
             startContent={<Search className="text-default-300" size={18} />}
             value={searchQuery}
             onValueChange={setSearchQuery}
@@ -197,8 +154,8 @@ export default function ArsipRekamMedisDokterPage() {
       {/* TABEL DAFTAR PASIEN */}
       <div className="overflow-x-auto w-full">
         <Table
-          aria-label="Tabel Arsip Rekam Medis Dokter"
-          className="shadow-sm border border-slate-200 min-w-max"
+          aria-label="Tabel Arsip Rekam Medis"
+          className="shadow-sm min-w-max"
         >
           <TableHeader>
             <TableColumn>ID RM</TableColumn>
@@ -209,25 +166,15 @@ export default function ArsipRekamMedisDokterPage() {
           </TableHeader>
           <TableBody
             items={filteredPasien}
-            isLoading={isLoading || isAuthLoading}
+            isLoading={loadingDaftar}
             loadingContent={
-              <div className="flex flex-col items-center gap-2 p-4">
-                <Spinner size="md" color="primary" />
-                <span className="font-semibold text-klinik-blue">
-                  Memuat Data Rekam Medis Anda...
-                </span>
+              <div className="font-semibold text-klinik-blue">
+                Memuat Data...
               </div>
             }
-            emptyContent={
-              isLoading || isAuthLoading
-                ? " "
-                : !currentUsername
-                  ? "Sesi login tidak valid. Silakan login ulang."
-                  : `Belum ada riwayat rekam medis yang tercatat atas nama dokter '${currentUsername}'.`
-            }
+            emptyContent={loadingDaftar ? " " : "Data tidak ditemukan."}
           >
             {(pasien) => (
-              // 🔥 SOLUSI UTAMA: Berikan key secara langsung dan eksplisit di sini
               <TableRow key={pasien.id_rm}>
                 <TableCell>
                   <Chip
@@ -239,12 +186,12 @@ export default function ArsipRekamMedisDokterPage() {
                     {pasien.id_rm}
                   </Chip>
                 </TableCell>
-                <TableCell className="font-medium text-slate-700 uppercase">
+                <TableCell className="font-medium text-slate-700 whitespace-nowrap">
                   {pasien.nama}
                 </TableCell>
-                <TableCell>{pasien.jenis_kelamin || "-"}</TableCell>
+                <TableCell>{pasien.jenis_kelamin}</TableCell>
                 <TableCell className="font-mono text-sm">
-                  {pasien.no_telepon || "-"}
+                  {pasien.no_telepon}
                 </TableCell>
                 <TableCell>
                   <Button
@@ -265,7 +212,7 @@ export default function ArsipRekamMedisDokterPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* MODAL RIWAYAT REKAM MEDIS (ACCORDION PER PASIEN) */}
+      {/* MODAL RIWAYAT REKAM MEDIS (ACCORDION) */}
       {/* ========================================================================= */}
       <Modal
         isOpen={isOpen}
@@ -273,7 +220,7 @@ export default function ArsipRekamMedisDokterPage() {
         placement="center"
         size="3xl"
         scrollBehavior="inside"
-        onClose={() => setSelectedRm(null)}
+        onClose={() => setSelectedRm(null)} // Reset state saat ditutup
       >
         <ModalContent>
           {(onClose) => (
@@ -282,14 +229,14 @@ export default function ArsipRekamMedisDokterPage() {
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="text-klinik-blue" size={24} />
                   <span className="text-lg font-bold">
-                    Histori Pemeriksaan Pasien
+                    Histori Rekam Medis Pasien
                   </span>
                 </div>
-                {detailPasien && (
+                {!loadingDetail && detailPasien && (
                   <p className="text-sm font-normal text-slate-500 mt-1 flex gap-4">
                     <span>
                       Nama:{" "}
-                      <strong className="text-slate-700 uppercase">
+                      <strong className="text-slate-700">
                         {detailPasien.nama}
                       </strong>
                     </span>
@@ -304,13 +251,20 @@ export default function ArsipRekamMedisDokterPage() {
               </ModalHeader>
 
               <ModalBody className="py-6 bg-slate-50/50">
-                {patientRmHistory.length === 0 ? (
+                {loadingDetail ? (
+                  <div className="flex flex-col items-center justify-center py-10 gap-4">
+                    <Spinner size="lg" color="primary" />
+                    <p className="text-sm text-slate-500 font-medium">
+                      Mendekripsi Rekam Medis (AES-256)...
+                    </p>
+                  </div>
+                ) : !detailPasien || detailPasien.rekamMedis.length === 0 ? (
                   <div className="text-center py-10 text-slate-500">
-                    Tidak ada riwayat rekam medis yang ditemukan.
+                    Pasien ini belum memiliki riwayat rekam medis.
                   </div>
                 ) : (
                   <Accordion variant="splitted" className="px-0">
-                    {patientRmHistory.map((rm) => {
+                    {detailPasien.rekamMedis.map((rm, index) => {
                       const tglPeriksa = new Date(
                         rm.waktu_periksa,
                       ).toLocaleDateString("id-ID", {
@@ -322,7 +276,7 @@ export default function ArsipRekamMedisDokterPage() {
 
                       return (
                         <AccordionItem
-                          key={rm.safeKey || rm.id_pemeriksaan}
+                          key={rm.id_pemeriksaan}
                           aria-label={`Pemeriksaan ${tglPeriksa}`}
                           title={
                             <div className="flex items-center gap-2 font-bold text-slate-700">
@@ -341,14 +295,9 @@ export default function ArsipRekamMedisDokterPage() {
                                 color="default"
                                 startContent={<User size={12} />}
                               >
-                                Dr. {rm.dokter?.username || "-"}
+                                Dr. {rm.dokter?.username || "Tidak diketahui"}
                               </Chip>
-                              <Chip
-                                size="sm"
-                                variant="flat"
-                                color="warning"
-                                className="font-mono"
-                              >
+                              <Chip size="sm" variant="flat" color="warning">
                                 {rm.nopen}
                               </Chip>
                             </div>
@@ -361,7 +310,7 @@ export default function ArsipRekamMedisDokterPage() {
                             {/* VITAL SIGN */}
                             <div>
                               <h4 className="flex items-center gap-2 text-sm font-bold text-slate-700 mb-2">
-                                <Activity size={16} className="text-blue-500" />
+                                <Activity size={16} className="text-primary" />
                                 Tanda Vital & Kondisi Umum
                               </h4>
                               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
@@ -370,19 +319,19 @@ export default function ArsipRekamMedisDokterPage() {
                                     Tensi
                                   </p>
                                   <p className="font-semibold">
-                                    {rm.tensi_darah || "-"} mmHg
+                                    {rm.tensi_darah || "-"}
                                   </p>
                                 </div>
                                 <div className="bg-slate-50 p-2 rounded border border-slate-100">
                                   <p className="text-slate-400 text-xs">Suhu</p>
                                   <p className="font-semibold">
-                                    {rm.suhu || "-"} °C
+                                    {rm.suhu || "-"}
                                   </p>
                                 </div>
                                 <div className="bg-slate-50 p-2 rounded border border-slate-100">
                                   <p className="text-slate-400 text-xs">Nadi</p>
                                   <p className="font-semibold">
-                                    {rm.nadi || "-"} x/mnt
+                                    {rm.nadi || "-"}
                                   </p>
                                 </div>
                                 <div className="bg-slate-50 p-2 rounded border border-slate-100">
@@ -398,30 +347,14 @@ export default function ArsipRekamMedisDokterPage() {
 
                             {/* DIAGNOSIS & TERAPI */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                              <div className="bg-purple-50/50 p-3 rounded-lg border border-purple-100 flex flex-col gap-2">
-                                <h4 className="flex items-center gap-2 text-sm font-bold text-purple-800 mb-1">
+                              <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100">
+                                <h4 className="flex items-center gap-2 text-sm font-bold text-blue-800 mb-1">
                                   <ShieldCheck size={16} /> Diagnosis
                                 </h4>
-                                <div>
-                                  <p className="text-xs text-purple-600 font-semibold">
-                                    Utama:
-                                  </p>
-                                  <p className="text-sm text-slate-700 whitespace-pre-wrap">
-                                    {rm.diagnosis_utama || "-"}
-                                  </p>
-                                </div>
-                                {rm.diagnosis_sekunder && (
-                                  <div>
-                                    <p className="text-xs text-purple-600 font-semibold mt-1">
-                                      Sekunder:
-                                    </p>
-                                    <p className="text-sm text-slate-700 whitespace-pre-wrap">
-                                      {rm.diagnosis_sekunder}
-                                    </p>
-                                  </div>
-                                )}
+                                <p className="text-sm text-slate-700 whitespace-pre-wrap">
+                                  {rm.diagnosis_utama || "Belum ada diagnosis."}
+                                </p>
                               </div>
-
                               <div className="bg-emerald-50/50 p-3 rounded-lg border border-emerald-100">
                                 <h4 className="flex items-center gap-2 text-sm font-bold text-emerald-800 mb-1">
                                   <Pill size={16} /> Terapi / Pengobatan
@@ -429,23 +362,10 @@ export default function ArsipRekamMedisDokterPage() {
                                 <p className="text-sm text-slate-700 whitespace-pre-wrap">
                                   {rm.terapi_pengobatan || "Belum ada terapi."}
                                 </p>
-                                {(rm.edukasi || rm.rencana_diet) && (
-                                  <div className="mt-3 pt-3 border-t border-emerald-200/50">
-                                    <p className="text-xs text-emerald-600 font-semibold">
-                                      Edukasi / Diet:
-                                    </p>
-                                    <p className="text-sm text-slate-700 whitespace-pre-wrap">
-                                      {rm.edukasi}{" "}
-                                      {rm.rencana_diet
-                                        ? `(Diet: ${rm.rencana_diet})`
-                                        : ""}
-                                    </p>
-                                  </div>
-                                )}
                               </div>
                             </div>
 
-                            {/* TOMBOL CETAK RESUME MEDIS */}
+                            {/* TAMBAHKAN TOMBOL CETAK DI SINI */}
                             <div className="flex justify-end mt-4 pt-4 border-t border-slate-100">
                               <Button
                                 size="sm"
@@ -454,12 +374,12 @@ export default function ArsipRekamMedisDokterPage() {
                                 startContent={<Printer size={16} />}
                                 onPress={() =>
                                   window.open(
-                                    `/dashboard/dokter/rekam-medis/${rm.nopen}/cetak`,
+                                    `/dashboard/admin/arsip-rm/cetak?id_rm=${detailPasien.id_rm}&nopen=${rm.nopen}`,
                                     "_blank",
                                   )
                                 }
                               >
-                                Cetak Resume (PDF)
+                                Cetak Dokumen (PDF/Print)
                               </Button>
                             </div>
                           </div>
@@ -471,7 +391,7 @@ export default function ArsipRekamMedisDokterPage() {
               </ModalBody>
 
               <ModalFooter className="bg-white border-t">
-                <Button color="primary" variant="flat" onPress={onClose}>
+                <Button color="primary" onPress={onClose}>
                   Tutup Arsip
                 </Button>
               </ModalFooter>
