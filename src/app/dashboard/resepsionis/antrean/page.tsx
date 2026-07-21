@@ -26,7 +26,7 @@ import {
   AutocompleteItem,
   Card,
   CardBody,
-  Input, // 🔥 Ditambahkan untuk input nomor BPJS
+  Input,
 } from "@nextui-org/react";
 import {
   Plus,
@@ -35,7 +35,7 @@ import {
   Clock,
   Users,
   Activity,
-  CreditCard, // 🔥 Icon kartu untuk nomor BPJS
+  CreditCard,
 } from "lucide-react";
 import api from "@/lib/axios";
 
@@ -67,11 +67,10 @@ const antreanSchema = yup.object().shape({
   unit_pelayanan: yup.string().required("Pilih unit pelayanan (Poli)"),
   sub_unit: yup.string().optional(),
   cara_bayar: yup.string().required("Pilih cara bayar"),
-  // 🔥 Validasi opsional untuk nomor BPJS (akan wajib jika cara bayar BPJS)
+  // Validasi dinamis: Wajib diisi jika cara bayar yang dipilih adalah BPJS
   no_bpjs: yup.string().when("cara_bayar", {
     is: "BPJS",
-    then: (schema) =>
-      schema.required("Nomor BPJS/KIS wajib diisi untuk pasien BPJS"),
+    then: (schema) => schema.required("Nomor BPJS/KIS wajib diisi"),
     otherwise: (schema) => schema.optional(),
   }),
 });
@@ -97,7 +96,7 @@ export default function AntreanPage() {
     resolver: yupResolver(antreanSchema) as any,
   });
 
-  // Pantau nilai cara_bayar secara real-time untuk memunculkan input BPJS
+  // Pantau nilai cara_bayar secara real-time
   const selectedCaraBayar = watch("cara_bayar");
 
   // =========================================================================
@@ -123,7 +122,7 @@ export default function AntreanPage() {
   });
 
   const { data: listPasien = [] } = useQuery<Pasien[]>({
-    queryKey: उपन्यासListPasien || ["pasienListDropdown"],
+    queryKey: ["pasienListDropdown"],
     queryFn: async () => {
       try {
         const res = await api.get("/pasien");
@@ -161,8 +160,8 @@ export default function AntreanPage() {
   // =========================================================================
   const mutation = useMutation({
     mutationFn: async (newData: AntreanFormData) => {
-      // Jika pasien memilih BPJS, kita bisa gabungkan nomor BPJS ke dalam sub_unit
-      // agar backend tetap aman tanpa perlu mengubah skema database.
+      // Jika pasien memilih BPJS, nomor BPJS dititipkan ke sub_unit
+      // agar backend tetap aman tanpa perlu merubah skema database Prisma.
       const payload = {
         ...newData,
         sub_unit:
@@ -171,8 +170,7 @@ export default function AntreanPage() {
             : newData.sub_unit || null,
       };
 
-      // Hapus properti lokal no_bpjs agar tidak dikirim mentah ke backend yang strict
-      delete payload.no_bpjs;
+      delete payload.no_bpjs; // Hapus properti temporary sebelum dikirim ke server
 
       return await api.post("/antrean", payload);
     },
@@ -553,7 +551,7 @@ export default function AntreanPage() {
 
                 {/* 🔥 INPUT DINAMIS: Otomatis muncul jika Cara Bayar yang dipilih adalah BPJS */}
                 {selectedCaraBayar === "BPJS" && (
-                  <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex flex-col gap-2 animate-fadeIn">
+                  <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex flex-col gap-2">
                     <Input
                       {...register("no_bpjs")}
                       isRequired
@@ -568,7 +566,7 @@ export default function AntreanPage() {
                     />
                     <p className="text-xs text-blue-600">
                       * Nomor kartu ini akan disimpan secara aman di dalam
-                      catatan sub-unit pelayanan antrean.
+                      catatan sistem.
                     </p>
                   </div>
                 )}
