@@ -86,31 +86,25 @@ export default function ArsipRekamMedisDokterPage() {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   // =========================================================================
-  // 2. DETEKSI USER LANGSUNG DARI TOKEN JWT DI LOCALSTORAGE
+  // 2. DETEKSI USER LOGIN SESUAI STRUKTUR BACKEND
   // =========================================================================
   useEffect(() => {
-    const getUsernameFromSession = () => {
+    const detectUserSession = () => {
       try {
-        // 1. Cek apakah ada objek user tersimpan langsung
-        const rawUser =
-          localStorage.getItem("user") || localStorage.getItem("userData");
-        if (rawUser) {
-          const parsed = JSON.parse(rawUser);
-          const uname = parsed?.username || parsed?.data?.username;
-          if (uname) {
-            setCurrentUsername(uname);
+        // SKENARIO 1: Mengambil dari objek 'user' yang disimpan saat login
+        const storedUser = localStorage.getItem("user");
+        if (storedUser) {
+          const parsedUser = JSON.parse(storedUser);
+          if (parsedUser && parsedUser.username) {
+            setCurrentUsername(parsedUser.username);
             setIsAuthLoading(false);
             return;
           }
         }
 
-        // 2. JIKA HANYA ADA TOKEN JWT (Skenario Utama Kamu)
-        // Sesuaikan "token" dengan nama key yang kamu pakai saat setItem di halaman Login
-        const token =
-          localStorage.getItem("token") || localStorage.getItem("accessToken");
-
+        // SKENARIO 2: Mendecode JWT Token yang berlaku 8 jam (Sesuai Controller)
+        const token = localStorage.getItem("token");
         if (token) {
-          // Fungsi bawaan JS untuk membedah payload JWT
           const base64Url = token.split(".")[1];
           const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
           const jsonPayload = decodeURIComponent(
@@ -123,34 +117,33 @@ export default function ArsipRekamMedisDokterPage() {
               .join(""),
           );
 
-          const decodedData = JSON.parse(jsonPayload);
-
-          // Ambil username dari dalam token
-          if (decodedData && decodedData.username) {
-            setCurrentUsername(decodedData.username);
+          const decodedToken = JSON.parse(jsonPayload);
+          // Token kamu berisi { id, username, role, iat, exp }
+          if (decodedToken && decodedToken.username) {
+            setCurrentUsername(decodedToken.username);
             setIsAuthLoading(false);
             return;
           }
         }
 
-        // Jika token tidak ada sama sekali
-        console.warn("Tidak ada token JWT di localStorage.");
+        // Jika tidak ada data login sama sekali
+        console.warn("Sesi login tidak terdeteksi di localStorage.");
         setIsAuthLoading(false);
-      } catch (err) {
-        console.error("Gagal mendecode JWT:", err);
+      } catch (error) {
+        console.error("Gagal mendeteksi sesi login:", error);
         setIsAuthLoading(false);
       }
     };
 
-    getUsernameFromSession();
+    detectUserSession();
   }, []);
 
   // =========================================================================
   // 3. FETCH DATA & FILTER DINAMIS SESUAI USERNAME DOKTER
   // =========================================================================
   const { data: listRM = [], isLoading } = useQuery<RekamMedis[]>({
-    queryKey: ["rekamMedisDokterDinamis", currentUsername],
-    enabled: !isAuthLoading && !!currentUsername, // Hanya jalan jika username ketemu dari token
+    queryKey: ["rekamMedisDokter", currentUsername],
+    enabled: !isAuthLoading && !!currentUsername, // Jalan hanya jika username ditemukan
     queryFn: async () => {
       try {
         const res = await api.get("/rekam-medis");
@@ -168,7 +161,7 @@ export default function ArsipRekamMedisDokterPage() {
     },
   });
 
-  // 🔥 FILTER DINAMIS: Mencocokkan rekam medis berdasarkan username dari token
+  // 🔥 FILTER DINAMIS: Mencocokkan rekam medis berdasarkan username yang login
   const filteredByDoctor = listRM.filter((rm) => {
     if (!currentUsername) return false;
     return rm.dokter?.username?.toLowerCase() === currentUsername.toLowerCase();
@@ -218,8 +211,8 @@ export default function ArsipRekamMedisDokterPage() {
             Menampilkan histori rekam medis yang diperiksa oleh akun:{" "}
             <span className="font-bold text-klinik-blue uppercase">
               {isAuthLoading
-                ? "Membaca Token..."
-                : currentUsername || "Tidak dikenali"}
+                ? "Membaca Sesi..."
+                : currentUsername || "Tidak Dikenali"}
             </span>
           </p>
         </div>
@@ -268,7 +261,7 @@ export default function ArsipRekamMedisDokterPage() {
               isLoading || isAuthLoading
                 ? " "
                 : !currentUsername
-                  ? "Sesi login tidak ditemukan. Pastikan token JWT tersedia."
+                  ? "Sesi login tidak ditemukan. Silakan login ulang."
                   : `Belum ada riwayat rekam medis yang tercatat atas nama dokter '${currentUsername}'.`
             }
           >
