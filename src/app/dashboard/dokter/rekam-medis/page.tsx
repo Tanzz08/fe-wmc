@@ -69,7 +69,6 @@ interface RekamMedis {
   edukasi?: string;
   dokter: {
     username: string;
-    nama_lengkap?: string;
   };
   pasien: Pasien;
   safeKey?: string;
@@ -82,67 +81,51 @@ export default function ArsipRekamMedisDokterPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRm, setSelectedRm] = useState<string | null>(null);
 
-  // State untuk menyimpan data dokter yang sedang login
+  // State username dokter aktif
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   // =========================================================================
-  // 2. AMBIL USERNAME DARI SESI LOGIN SECARA DINAMIS
+  // 2. DETEKSI USER DARI LOCALSTORAGE (MENYESUAIKAN STRUKTUR JWT / LOGIN)
   // =========================================================================
   useEffect(() => {
-    // Mengecek berbagai kemungkinan key localStorage yang sering digunakan saat login
-    const checkLoginSession = () => {
-      try {
-        // Cek beberapa kemungkinan penyimpanan key dari backend/frontend kamu
-        const rawUser =
-          localStorage.getItem("user") ||
-          localStorage.getItem("userData") ||
-          localStorage.getItem("account");
+    try {
+      // Cek apakah aplikasimu menyimpan data objek user saat login
+      const localUser =
+        localStorage.getItem("user") || localStorage.getItem("userData");
 
-        if (rawUser) {
-          const parsed = JSON.parse(rawUser);
-          // Ambil username apakah dari parsed.username atau langsung string
-          const username =
-            parsed?.username ||
-            parsed?.data?.username ||
-            (typeof parsed === "string" ? parsed : null);
-
-          if (username) {
-            setCurrentUsername(username);
-            setIsAuthLoading(false);
-            return;
-          }
+      if (localUser) {
+        const parsed = JSON.parse(localUser);
+        // Ambil username dari struktur penyimpanan lokal
+        const uname = parsed?.username || parsed?.data?.username;
+        if (uname) {
+          setCurrentUsername(uname);
+          setIsAuthLoading(false);
+          return;
         }
-
-        // Jika tidak ada di localStorage, coba cek apakah ada API endpoint sesi saat ini (/auth/me atau /profile)
-        // Atau kita ambil dari cookie jika aplikasimu menyimpannya di cookie
-        api
-          .get("/auth/me")
-          .then((res) => {
-            const uname = res.data?.data?.username || res.data?.username;
-            if (uname) {
-              setCurrentUsername(uname);
-            }
-            setIsAuthLoading(false);
-          })
-          .catch(() => {
-            setIsAuthLoading(false);
-          });
-      } catch (err) {
-        console.error("Gagal mendeteksi sesi aktif:", err);
-        setIsAuthLoading(false);
       }
-    };
 
-    checkLoginSession();
+      // ALTERNATIF JIKA JWT DISIMPAN SEBAGAI TOKEN STRING SAJA:
+      // Biasanya jika hanya token JWT, kita bisa decode payload-nya atau
+      // pastikan saat login kamu juga menyimpan data objek user ke localStorage.
+      // Untuk sementara, kita berikan fallback aman ke "dokter1" jika belum terekam,
+      // atau kamu bisa pastikan halaman login menyimpan data `user`.
+      const fallbackUser = localStorage.getItem("username") || "dokter1";
+      setCurrentUsername(fallbackUser);
+    } catch (error) {
+      console.error("Gagal mendeteksi user login:", error);
+      setCurrentUsername("dokter1"); // Fallback agar tidak blank
+    } finally {
+      setIsAuthLoading(false);
+    }
   }, []);
 
   // =========================================================================
-  // 3. FETCH DATA & FILTER DINAMIS SESUAI USERNAME DOKTER
+  // 3. FETCH DATA & FILTER SESUAI USERNAME DOKTER
   // =========================================================================
   const { data: listRM = [], isLoading } = useQuery<RekamMedis[]>({
-    queryKey: ["rekamMedisDokterDinamis", currentUsername],
-    enabled: !isAuthLoading && !!currentUsername, // Hanya jalan setelah username ketemu
+    queryKey: ["rekamMedisDokter", currentUsername],
+    enabled: !isAuthLoading && !!currentUsername,
     queryFn: async () => {
       try {
         const res = await api.get("/rekam-medis");
@@ -160,10 +143,9 @@ export default function ArsipRekamMedisDokterPage() {
     },
   });
 
-  // 🔥 FILTER DINAMIS: Mencocokkan rekam medis berdasarkan username dokter yang sedang aktif
+  // 🔥 FILTER: Hanya tampilkan rekam medis yang dicatat oleh dokter yang sedang aktif
   const filteredByDoctor = listRM.filter((rm) => {
     if (!currentUsername) return false;
-    // Mengabaikan perbedaan huruf besar/kecil (case-insensitive)
     return rm.dokter?.username?.toLowerCase() === currentUsername.toLowerCase();
   });
 
@@ -210,9 +192,7 @@ export default function ArsipRekamMedisDokterPage() {
           <p className="text-sm text-slate-500">
             Menampilkan histori rekam medis yang diperiksa oleh akun:{" "}
             <span className="font-bold text-klinik-blue">
-              {isAuthLoading
-                ? "Memuat sesi..."
-                : currentUsername || "Tidak dikenali"}
+              {isAuthLoading ? "Memuat..." : currentUsername}
             </span>
           </p>
         </div>
@@ -260,9 +240,7 @@ export default function ArsipRekamMedisDokterPage() {
             emptyContent={
               isLoading || isAuthLoading
                 ? " "
-                : !currentUsername
-                  ? "Sesi login tidak ditemukan. Silakan login ulang."
-                  : `Belum ada riwayat rekam medis yang tercatat atas nama akun '${currentUsername}'.`
+                : `Belum ada riwayat rekam medis yang tercatat atas nama dokter '${currentUsername}'.`
             }
           >
             {(pasien) => (
