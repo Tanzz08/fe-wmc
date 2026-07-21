@@ -86,46 +86,71 @@ export default function ArsipRekamMedisDokterPage() {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   // =========================================================================
-  // 2. DETEKSI USER DARI LOCALSTORAGE (MENYESUAIKAN STRUKTUR JWT / LOGIN)
+  // 2. DETEKSI USER LANGSUNG DARI TOKEN JWT DI LOCALSTORAGE
   // =========================================================================
   useEffect(() => {
-    try {
-      // Cek apakah aplikasimu menyimpan data objek user saat login
-      const localUser =
-        localStorage.getItem("user") || localStorage.getItem("userData");
-
-      if (localUser) {
-        const parsed = JSON.parse(localUser);
-        // Ambil username dari struktur penyimpanan lokal
-        const uname = parsed?.username || parsed?.data?.username;
-        if (uname) {
-          setCurrentUsername(uname);
-          setIsAuthLoading(false);
-          return;
+    const getUsernameFromSession = () => {
+      try {
+        // 1. Cek apakah ada objek user tersimpan langsung
+        const rawUser =
+          localStorage.getItem("user") || localStorage.getItem("userData");
+        if (rawUser) {
+          const parsed = JSON.parse(rawUser);
+          const uname = parsed?.username || parsed?.data?.username;
+          if (uname) {
+            setCurrentUsername(uname);
+            setIsAuthLoading(false);
+            return;
+          }
         }
-      }
 
-      // ALTERNATIF JIKA JWT DISIMPAN SEBAGAI TOKEN STRING SAJA:
-      // Biasanya jika hanya token JWT, kita bisa decode payload-nya atau
-      // pastikan saat login kamu juga menyimpan data objek user ke localStorage.
-      // Untuk sementara, kita berikan fallback aman ke "dokter1" jika belum terekam,
-      // atau kamu bisa pastikan halaman login menyimpan data `user`.
-      const fallbackUser = localStorage.getItem("username") || "dokter1";
-      setCurrentUsername(fallbackUser);
-    } catch (error) {
-      console.error("Gagal mendeteksi user login:", error);
-      setCurrentUsername("dokter1"); // Fallback agar tidak blank
-    } finally {
-      setIsAuthLoading(false);
-    }
+        // 2. JIKA HANYA ADA TOKEN JWT (Skenario Utama Kamu)
+        // Sesuaikan "token" dengan nama key yang kamu pakai saat setItem di halaman Login
+        const token =
+          localStorage.getItem("token") || localStorage.getItem("accessToken");
+
+        if (token) {
+          // Fungsi bawaan JS untuk membedah payload JWT
+          const base64Url = token.split(".")[1];
+          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+          const jsonPayload = decodeURIComponent(
+            window
+              .atob(base64)
+              .split("")
+              .map(function (c) {
+                return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+              })
+              .join(""),
+          );
+
+          const decodedData = JSON.parse(jsonPayload);
+
+          // Ambil username dari dalam token
+          if (decodedData && decodedData.username) {
+            setCurrentUsername(decodedData.username);
+            setIsAuthLoading(false);
+            return;
+          }
+        }
+
+        // Jika token tidak ada sama sekali
+        console.warn("Tidak ada token JWT di localStorage.");
+        setIsAuthLoading(false);
+      } catch (err) {
+        console.error("Gagal mendecode JWT:", err);
+        setIsAuthLoading(false);
+      }
+    };
+
+    getUsernameFromSession();
   }, []);
 
   // =========================================================================
-  // 3. FETCH DATA & FILTER SESUAI USERNAME DOKTER
+  // 3. FETCH DATA & FILTER DINAMIS SESUAI USERNAME DOKTER
   // =========================================================================
   const { data: listRM = [], isLoading } = useQuery<RekamMedis[]>({
-    queryKey: ["rekamMedisDokter", currentUsername],
-    enabled: !isAuthLoading && !!currentUsername,
+    queryKey: ["rekamMedisDokterDinamis", currentUsername],
+    enabled: !isAuthLoading && !!currentUsername, // Hanya jalan jika username ketemu dari token
     queryFn: async () => {
       try {
         const res = await api.get("/rekam-medis");
@@ -143,7 +168,7 @@ export default function ArsipRekamMedisDokterPage() {
     },
   });
 
-  // 🔥 FILTER: Hanya tampilkan rekam medis yang dicatat oleh dokter yang sedang aktif
+  // 🔥 FILTER DINAMIS: Mencocokkan rekam medis berdasarkan username dari token
   const filteredByDoctor = listRM.filter((rm) => {
     if (!currentUsername) return false;
     return rm.dokter?.username?.toLowerCase() === currentUsername.toLowerCase();
@@ -191,8 +216,10 @@ export default function ArsipRekamMedisDokterPage() {
           </h1>
           <p className="text-sm text-slate-500">
             Menampilkan histori rekam medis yang diperiksa oleh akun:{" "}
-            <span className="font-bold text-klinik-blue">
-              {isAuthLoading ? "Memuat..." : currentUsername}
+            <span className="font-bold text-klinik-blue uppercase">
+              {isAuthLoading
+                ? "Membaca Token..."
+                : currentUsername || "Tidak dikenali"}
             </span>
           </p>
         </div>
@@ -240,7 +267,9 @@ export default function ArsipRekamMedisDokterPage() {
             emptyContent={
               isLoading || isAuthLoading
                 ? " "
-                : `Belum ada riwayat rekam medis yang tercatat atas nama dokter '${currentUsername}'.`
+                : !currentUsername
+                  ? "Sesi login tidak ditemukan. Pastikan token JWT tersedia."
+                  : `Belum ada riwayat rekam medis yang tercatat atas nama dokter '${currentUsername}'.`
             }
           >
             {(pasien) => (
