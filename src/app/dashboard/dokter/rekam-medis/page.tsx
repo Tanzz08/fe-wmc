@@ -1,168 +1,455 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import {
+  Card,
+  CardBody,
+  Input,
+  Button,
   Table,
   TableHeader,
   TableColumn,
   TableBody,
   TableRow,
   TableCell,
-  Button,
-  Input,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  useDisclosure,
   Chip,
   Spinner,
+  Accordion,
+  AccordionItem,
+  Divider,
 } from "@nextui-org/react";
-import { Search, Eye } from "lucide-react";
+import {
+  Archive,
+  Search,
+  Eye,
+  User,
+  Calendar,
+  Activity,
+  Pill,
+  ShieldCheck,
+  Printer,
+} from "lucide-react";
 import api from "@/lib/axios";
 
 // =========================================================================
-// 1. INTERFACE TYPESCRIPT
+// 1. TIPE DATA
 // =========================================================================
+interface Pasien {
+  id_rm: string;
+  nama: string;
+  jenis_kelamin: string;
+  tanggal_lahir: string;
+  no_telepon: string;
+  alamat: string;
+}
+
 interface RekamMedis {
   id_pemeriksaan: number;
   nopen: string;
   id_rm: string;
   waktu_periksa: string;
-  diagnosis_utama: string | null;
-  pasien: { nama: string };
-  dokter: { username: string };
-  safeKey?: string; // Fallback key anti-error untuk NextUI Table
+  tensi_darah: string;
+  nadi: string;
+  suhu: string;
+  keadaan_umum: string;
+  diagnosis_utama: string;
+  icd10_utama?: string;
+  diagnosis_sekunder?: string;
+  icd10_sekunder?: string;
+  terapi_pengobatan: string;
+  rencana_diet?: string;
+  edukasi?: string;
+  dokter: {
+    username: string;
+  };
+  pasien: Pasien;
 }
 
-// =========================================================================
-// 2. KOMPONEN UTAMA
-// =========================================================================
-export default function MasterRekamMedisPage() {
-  const router = useRouter();
+export default function RekamMedisDokterPage() {
+  const { isOpen, onOpen, onOpenChange } = useDisclosure();
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRm, setSelectedRm] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
-  // Mengambil semua data rekam medis dari backend menggunakan React Query
-  const { data: listRM = [], isLoading } = useQuery<RekamMedis[]>({
-    queryKey: ["rekamMedisList"],
+  // =========================================================================
+  // 2. AMBIL DATA DOKTER YANG SEDANG LOGIN
+  // =========================================================================
+  useEffect(() => {
+    // Ambil data user dari localStorage (sesuaikan jika kamu menggunakan context/cookies)
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      setCurrentUser(JSON.parse(userStr));
+    }
+  }, []);
+
+  // =========================================================================
+  // 3. FETCH REKAM MEDIS & FILTER KHUSUS DOKTER INI
+  // =========================================================================
+  const { data: allMyRm = [], isLoading } = useQuery<RekamMedis[]>({
+    queryKey: ["rekamMedisDokter", currentUser?.username],
+    enabled: !!currentUser?.username, // Hanya menembak API jika user sudah didapatkan
     queryFn: async () => {
       try {
         const res = await api.get("/rekam-medis");
-        const fetchedData = res.data?.data || res.data;
-        const safeData = Array.isArray(fetchedData) ? fetchedData : [];
+        const data = Array.isArray(res.data?.data) ? res.data.data : [];
 
-        // Memetakan data dengan safeKey agar tabel NextUI 100% stabil
-        return safeData.map((item, index) => ({
-          ...item,
-          safeKey: item.nopen || `fallback-rm-${index}`,
-        }));
+        // 🔥 FILTER PENTING: Hanya ambil RM yang dikerjakan oleh dokter ini
+        return data.filter(
+          (rm: any) => rm.dokter?.username === currentUser.username,
+        );
       } catch (error) {
-        console.error("Gagal menarik data arsip rekam medis", error);
+        console.error("Gagal menarik data rekam medis", error);
         return [];
       }
     },
   });
 
-  // Fitur Live Search: Filter berdasarkan Nama atau ID RM
-  const filteredRM = listRM.filter((rm) => {
-    const query = searchQuery.toLowerCase();
-    const namaPasien = rm.pasien?.nama?.toLowerCase() || "";
-    const idRm = rm.id_rm?.toLowerCase() || "";
-
-    return namaPasien.includes(query) || idRm.includes(query);
+  // Ekstrak data Pasien unik dari riwayat Rekam Medis dokter ini
+  const uniquePatientsMap = new Map<string, Pasien>();
+  allMyRm.forEach((rm) => {
+    if (rm.pasien && !uniquePatientsMap.has(rm.id_rm)) {
+      uniquePatientsMap.set(rm.id_rm, rm.pasien);
+    }
   });
+  const listPasien = Array.from(uniquePatientsMap.values());
+
+  // Filter pencarian tabel
+  const filteredPasien = listPasien.filter(
+    (p) =>
+      p.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.id_rm && p.id_rm.toLowerCase().includes(searchQuery.toLowerCase())),
+  );
+
+  // Data historis spesifik untuk pasien yang diklik di Modal
+  const patientRmHistory = allMyRm.filter((rm) => rm.id_rm === selectedRm);
+  const detailPasien = listPasien.find((p) => p.id_rm === selectedRm);
+
+  const handleBukaRiwayat = (id_rm: string) => {
+    setSelectedRm(id_rm);
+    onOpen();
+  };
 
   // =========================================================================
-  // 3. RENDER UI
+  // 4. RENDER UI
   // =========================================================================
   return (
     <div className="flex flex-col gap-6">
-      {/* HEADER & PENCARIAN */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      {/* HEADER */}
+      <div className="flex items-center gap-3">
+        <Archive className="text-klinik-blue" size={28} />
         <div>
           <h1 className="text-2xl font-bold text-slate-800">
-            Arsip Rekam Medis
+            Arsip Rekam Medis Pasien Saya
           </h1>
           <p className="text-sm text-slate-500">
-            Lacak riwayat pemeriksaan dan ringkasan pulang pasien sebelumnya.
+            Daftar histori rekam medis yang pernah Anda periksa dan diagnosis
+            (Poli {currentUser?.poli_tugas || "-"}).
           </p>
         </div>
-
-        <Input
-          isClearable
-          className="w-full sm:max-w-[300px]"
-          placeholder="Cari Nama Pasien atau ID RM..."
-          startContent={<Search size={18} className="text-slate-400" />}
-          value={searchQuery}
-          onValueChange={setSearchQuery}
-        />
       </div>
 
-      {/* TABEL DATA REKAM MEDIS */}
-      <Table aria-label="Tabel Riwayat Rekam Medis" className="shadow-sm">
-        <TableHeader>
-          <TableColumn>TANGGAL PERIKSA</TableColumn>
-          <TableColumn>ID RM</TableColumn>
-          <TableColumn>NAMA PASIEN</TableColumn>
-          <TableColumn>DIAGNOSIS UTAMA</TableColumn>
-          <TableColumn>DOKTER</TableColumn>
-          <TableColumn>AKSI</TableColumn>
-        </TableHeader>
-        <TableBody
-          emptyContent={
-            isLoading ? (
-              <div className="flex justify-center p-4">
-                <Spinner
-                  size="md"
-                  color="primary"
-                  label="Memuat arsip data..."
-                />
-              </div>
-            ) : (
-              "Tidak ada data rekam medis yang ditemukan."
-            )
-          }
-          items={filteredRM}
+      {/* PENCARIAN */}
+      <Card className="shadow-sm border border-slate-100">
+        <CardBody>
+          <Input
+            isClearable
+            className="w-full sm:max-w-md"
+            placeholder="Cari Pasien (Nama atau ID RM)..."
+            startContent={<Search className="text-default-300" size={18} />}
+            value={searchQuery}
+            onValueChange={setSearchQuery}
+            variant="bordered"
+          />
+        </CardBody>
+      </Card>
+
+      {/* TABEL DAFTAR PASIEN (Hanya pasien milik dokter ini) */}
+      <div className="overflow-x-auto w-full">
+        <Table
+          aria-label="Tabel Arsip Rekam Medis Dokter"
+          className="shadow-sm border border-slate-200 min-w-max"
         >
-          {(rm) => (
-            <TableRow key={rm.safeKey}>
-              <TableCell className="font-medium text-slate-600">
-                {new Date(rm.waktu_periksa).toLocaleDateString("id-ID", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                })}
-              </TableCell>
-              <TableCell className="font-semibold">{rm.id_rm}</TableCell>
-              <TableCell className="font-bold text-slate-800">
-                {rm.pasien?.nama}
-              </TableCell>
-              <TableCell>
-                {rm.diagnosis_utama ? (
-                  <Chip size="sm" variant="flat" color="secondary">
-                    {rm.diagnosis_utama}
+          <TableHeader>
+            <TableColumn>ID RM</TableColumn>
+            <TableColumn>NAMA PASIEN</TableColumn>
+            <TableColumn>JENIS KELAMIN</TableColumn>
+            <TableColumn>NO. TELEPON</TableColumn>
+            <TableColumn align="center">LIHAT BERKAS</TableColumn>
+          </TableHeader>
+          <TableBody
+            items={filteredPasien}
+            isLoading={isLoading}
+            loadingContent={
+              <div className="flex flex-col items-center gap-2">
+                <Spinner size="md" color="primary" />
+                <span className="font-semibold text-klinik-blue">
+                  Memuat Data Pasien Anda...
+                </span>
+              </div>
+            }
+            emptyContent={
+              isLoading ? " " : "Belum ada pasien yang Anda periksa."
+            }
+          >
+            {(pasien) => (
+              <TableRow key={pasien.id_rm}>
+                <TableCell>
+                  <Chip
+                    size="sm"
+                    color="primary"
+                    variant="flat"
+                    className="font-semibold"
+                  >
+                    {pasien.id_rm}
                   </Chip>
-                ) : (
-                  <span className="text-slate-400 italic text-xs">
-                    Tidak ada
+                </TableCell>
+                <TableCell className="font-medium text-slate-700 uppercase">
+                  {pasien.nama}
+                </TableCell>
+                <TableCell>{pasien.jenis_kelamin}</TableCell>
+                <TableCell className="font-mono text-sm">
+                  {pasien.no_telepon}
+                </TableCell>
+                <TableCell>
+                  <Button
+                    size="sm"
+                    color="primary"
+                    variant="flat"
+                    className="font-semibold"
+                    startContent={<Eye size={16} />}
+                    onPress={() => handleBukaRiwayat(pasien.id_rm)}
+                  >
+                    Buka Riwayat RM
+                  </Button>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* MODAL RIWAYAT REKAM MEDIS (ACCORDION) */}
+      {/* ========================================================================= */}
+      <Modal
+        isOpen={isOpen}
+        onOpenChange={onOpenChange}
+        placement="center"
+        size="3xl"
+        scrollBehavior="inside"
+        onClose={() => setSelectedRm(null)} // Reset state saat ditutup
+      >
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader className="flex flex-col gap-1 border-b">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="text-klinik-blue" size={24} />
+                  <span className="text-lg font-bold">
+                    Histori Pemeriksaan Pasien
                   </span>
+                </div>
+                {detailPasien && (
+                  <p className="text-sm font-normal text-slate-500 mt-1 flex gap-4">
+                    <span>
+                      Nama:{" "}
+                      <strong className="text-slate-700 uppercase">
+                        {detailPasien.nama}
+                      </strong>
+                    </span>
+                    <span>
+                      RM:{" "}
+                      <strong className="text-slate-700">
+                        {detailPasien.id_rm}
+                      </strong>
+                    </span>
+                  </p>
                 )}
-              </TableCell>
-              <TableCell>{rm.dokter?.username}</TableCell>
-              <TableCell>
-                <Button
-                  size="sm"
-                  color="primary"
-                  variant="flat"
-                  startContent={<Eye size={16} />}
-                  onPress={() =>
-                    router.push(`/dashboard/dokter/rekam-medis/${rm.nopen}`)
-                  }
-                >
-                  Lihat Detail
+              </ModalHeader>
+
+              <ModalBody className="py-6 bg-slate-50/50">
+                {patientRmHistory.length === 0 ? (
+                  <div className="text-center py-10 text-slate-500">
+                    Tidak ada riwayat rekam medis yang ditemukan.
+                  </div>
+                ) : (
+                  <Accordion variant="splitted" className="px-0">
+                    {patientRmHistory.map((rm) => {
+                      const tglPeriksa = new Date(
+                        rm.waktu_periksa,
+                      ).toLocaleDateString("id-ID", {
+                        weekday: "long",
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      });
+
+                      return (
+                        <AccordionItem
+                          key={rm.id_pemeriksaan}
+                          aria-label={`Pemeriksaan ${tglPeriksa}`}
+                          title={
+                            <div className="flex items-center gap-2 font-bold text-slate-700">
+                              <Calendar
+                                size={18}
+                                className="text-klinik-blue"
+                              />
+                              {tglPeriksa}
+                            </div>
+                          }
+                          subtitle={
+                            <div className="flex items-center gap-2 mt-1">
+                              <Chip
+                                size="sm"
+                                variant="flat"
+                                color="default"
+                                startContent={<User size={12} />}
+                              >
+                                Dr. {rm.dokter?.username || "-"}
+                              </Chip>
+                              <Chip
+                                size="sm"
+                                variant="flat"
+                                color="warning"
+                                className="font-mono"
+                              >
+                                {rm.nopen}
+                              </Chip>
+                            </div>
+                          }
+                          className="bg-white border border-slate-200 mb-2 rounded-xl shadow-sm px-4"
+                        >
+                          <div className="flex flex-col gap-4 pb-4">
+                            <Divider />
+
+                            {/* VITAL SIGN */}
+                            <div>
+                              <h4 className="flex items-center gap-2 text-sm font-bold text-slate-700 mb-2">
+                                <Activity size={16} className="text-blue-500" />
+                                Tanda Vital & Kondisi Umum
+                              </h4>
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+                                <div className="bg-slate-50 p-2 rounded border border-slate-100">
+                                  <p className="text-slate-400 text-xs">
+                                    Tensi
+                                  </p>
+                                  <p className="font-semibold">
+                                    {rm.tensi_darah || "-"} mmHg
+                                  </p>
+                                </div>
+                                <div className="bg-slate-50 p-2 rounded border border-slate-100">
+                                  <p className="text-slate-400 text-xs">Suhu</p>
+                                  <p className="font-semibold">
+                                    {rm.suhu || "-"} °C
+                                  </p>
+                                </div>
+                                <div className="bg-slate-50 p-2 rounded border border-slate-100">
+                                  <p className="text-slate-400 text-xs">Nadi</p>
+                                  <p className="font-semibold">
+                                    {rm.nadi || "-"} x/mnt
+                                  </p>
+                                </div>
+                                <div className="bg-slate-50 p-2 rounded border border-slate-100">
+                                  <p className="text-slate-400 text-xs">
+                                    Kondisi
+                                  </p>
+                                  <p className="font-semibold capitalize">
+                                    {rm.keadaan_umum || "-"}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* DIAGNOSIS & TERAPI */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                              <div className="bg-purple-50/50 p-3 rounded-lg border border-purple-100 flex flex-col gap-2">
+                                <h4 className="flex items-center gap-2 text-sm font-bold text-purple-800 mb-1">
+                                  <ShieldCheck size={16} /> Diagnosis
+                                </h4>
+                                <div>
+                                  <p className="text-xs text-purple-600 font-semibold">
+                                    Utama:
+                                  </p>
+                                  <p className="text-sm text-slate-700 whitespace-pre-wrap">
+                                    {rm.diagnosis_utama || "-"}
+                                  </p>
+                                </div>
+                                {rm.diagnosis_sekunder && (
+                                  <div>
+                                    <p className="text-xs text-purple-600 font-semibold mt-1">
+                                      Sekunder:
+                                    </p>
+                                    <p className="text-sm text-slate-700 whitespace-pre-wrap">
+                                      {rm.diagnosis_sekunder}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="bg-emerald-50/50 p-3 rounded-lg border border-emerald-100">
+                                <h4 className="flex items-center gap-2 text-sm font-bold text-emerald-800 mb-1">
+                                  <Pill size={16} /> Terapi / Pengobatan
+                                </h4>
+                                <p className="text-sm text-slate-700 whitespace-pre-wrap">
+                                  {rm.terapi_pengobatan || "Belum ada terapi."}
+                                </p>
+                                {(rm.edukasi || rm.rencana_diet) && (
+                                  <div className="mt-3 pt-3 border-t border-emerald-200/50">
+                                    <p className="text-xs text-emerald-600 font-semibold">
+                                      Edukasi / Diet:
+                                    </p>
+                                    <p className="text-sm text-slate-700 whitespace-pre-wrap">
+                                      {rm.edukasi}{" "}
+                                      {rm.rencana_diet
+                                        ? `(Diet: ${rm.rencana_diet})`
+                                        : ""}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* TOMBOL CETAK RESUME MEDIS */}
+                            <div className="flex justify-end mt-4 pt-4 border-t border-slate-100">
+                              <Button
+                                size="sm"
+                                color="primary"
+                                className="bg-klinik-blue font-semibold"
+                                startContent={<Printer size={16} />}
+                                onPress={() =>
+                                  window.open(
+                                    `/dashboard/dokter/rekam-medis/${rm.nopen}/cetak`,
+                                    "_blank",
+                                  )
+                                }
+                              >
+                                Cetak Resume (PDF)
+                              </Button>
+                            </div>
+                          </div>
+                        </AccordionItem>
+                      );
+                    })}
+                  </Accordion>
+                )}
+              </ModalBody>
+
+              <ModalFooter className="bg-white border-t">
+                <Button color="primary" onPress={onClose}>
+                  Tutup Arsip
                 </Button>
-              </TableCell>
-            </TableRow>
+              </ModalFooter>
+            </>
           )}
-        </TableBody>
-      </Table>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }
