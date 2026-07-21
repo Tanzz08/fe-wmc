@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useSession } from "next-auth/react"; // 🔥 MENGGUNAKAN NEXT-AUTH
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
@@ -81,69 +82,26 @@ export default function ArsipRekamMedisDokterPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRm, setSelectedRm] = useState<string | null>(null);
 
-  // State username dokter aktif
-  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
-
   // =========================================================================
-  // 2. DETEKSI USER LOGIN SESUAI STRUKTUR BACKEND
+  // 2. DETEKSI USER LOGIN MENGGUNAKAN NEXT-AUTH
   // =========================================================================
-  useEffect(() => {
-    const detectUserSession = () => {
-      try {
-        // SKENARIO 1: Mengambil dari objek 'user' yang disimpan saat login
-        const storedUser = localStorage.getItem("user");
-        if (storedUser) {
-          const parsedUser = JSON.parse(storedUser);
-          if (parsedUser && parsedUser.username) {
-            setCurrentUsername(parsedUser.username);
-            setIsAuthLoading(false);
-            return;
-          }
-        }
+  const { data: session, status } = useSession();
 
-        // SKENARIO 2: Mendecode JWT Token yang berlaku 8 jam (Sesuai Controller)
-        const token = localStorage.getItem("token");
-        if (token) {
-          const base64Url = token.split(".")[1];
-          const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-          const jsonPayload = decodeURIComponent(
-            window
-              .atob(base64)
-              .split("")
-              .map(function (c) {
-                return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
-              })
-              .join(""),
-          );
+  const isAuthLoading = status === "loading";
 
-          const decodedToken = JSON.parse(jsonPayload);
-          // Token kamu berisi { id, username, role, iat, exp }
-          if (decodedToken && decodedToken.username) {
-            setCurrentUsername(decodedToken.username);
-            setIsAuthLoading(false);
-            return;
-          }
-        }
-
-        // Jika tidak ada data login sama sekali
-        console.warn("Sesi login tidak terdeteksi di localStorage.");
-        setIsAuthLoading(false);
-      } catch (error) {
-        console.error("Gagal mendeteksi sesi login:", error);
-        setIsAuthLoading(false);
-      }
-    };
-
-    detectUserSession();
-  }, []);
+  // Tergantung konfigurasi callbacks NextAuth kamu, username bisa berada di
+  // session.user.username, session.user.name, atau session.user.email
+  const currentUsername =
+    (session?.user as any)?.username ||
+    session?.user?.name ||
+    session?.user?.email;
 
   // =========================================================================
   // 3. FETCH DATA & FILTER DINAMIS SESUAI USERNAME DOKTER
   // =========================================================================
   const { data: listRM = [], isLoading } = useQuery<RekamMedis[]>({
-    queryKey: ["rekamMedisDokter", currentUsername],
-    enabled: !isAuthLoading && !!currentUsername, // Jalan hanya jika username ditemukan
+    queryKey: ["rekamMedisDokterDinamis", currentUsername],
+    enabled: !isAuthLoading && !!currentUsername, // Hanya fetch setelah NextAuth siap
     queryFn: async () => {
       try {
         const res = await api.get("/rekam-medis");
@@ -161,7 +119,7 @@ export default function ArsipRekamMedisDokterPage() {
     },
   });
 
-  // 🔥 FILTER DINAMIS: Mencocokkan rekam medis berdasarkan username yang login
+  // 🔥 FILTER DINAMIS: Mencocokkan rekam medis berdasarkan username dari NextAuth
   const filteredByDoctor = listRM.filter((rm) => {
     if (!currentUsername) return false;
     return rm.dokter?.username?.toLowerCase() === currentUsername.toLowerCase();
@@ -211,8 +169,8 @@ export default function ArsipRekamMedisDokterPage() {
             Menampilkan histori rekam medis yang diperiksa oleh akun:{" "}
             <span className="font-bold text-klinik-blue uppercase">
               {isAuthLoading
-                ? "Membaca Sesi..."
-                : currentUsername || "Tidak Dikenali"}
+                ? "Memverifikasi sesi..."
+                : currentUsername || "Sesi Kedaluwarsa"}
             </span>
           </p>
         </div>
@@ -261,7 +219,7 @@ export default function ArsipRekamMedisDokterPage() {
               isLoading || isAuthLoading
                 ? " "
                 : !currentUsername
-                  ? "Sesi login tidak ditemukan. Silakan login ulang."
+                  ? "Sesi login tidak valid. Silakan login ulang."
                   : `Belum ada riwayat rekam medis yang tercatat atas nama dokter '${currentUsername}'.`
             }
           >
