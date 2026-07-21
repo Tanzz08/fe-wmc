@@ -26,6 +26,7 @@ import {
   AutocompleteItem,
   Card,
   CardBody,
+  Input, // 🔥 Ditambahkan untuk input nomor BPJS
 } from "@nextui-org/react";
 import {
   Plus,
@@ -34,6 +35,7 @@ import {
   Clock,
   Users,
   Activity,
+  CreditCard, // 🔥 Icon kartu untuk nomor BPJS
 } from "lucide-react";
 import api from "@/lib/axios";
 
@@ -43,7 +45,6 @@ import api from "@/lib/axios";
 interface Pasien {
   id_rm: string;
   nama: string;
-  // nik dihapus dari sini
 }
 
 interface Antrean {
@@ -66,9 +67,18 @@ const antreanSchema = yup.object().shape({
   unit_pelayanan: yup.string().required("Pilih unit pelayanan (Poli)"),
   sub_unit: yup.string().optional(),
   cara_bayar: yup.string().required("Pilih cara bayar"),
+  // 🔥 Validasi opsional untuk nomor BPJS (akan wajib jika cara bayar BPJS)
+  no_bpjs: yup.string().when("cara_bayar", {
+    is: "BPJS",
+    then: (schema) =>
+      schema.required("Nomor BPJS/KIS wajib diisi untuk pasien BPJS"),
+    otherwise: (schema) => schema.optional(),
+  }),
 });
 
-type AntreanFormData = yup.InferType<typeof antreanSchema>;
+type AntreanFormData = yup.InferType<typeof antreanSchema> & {
+  no_bpjs?: string;
+};
 
 export default function AntreanPage() {
   const queryClient = useQueryClient();
@@ -81,11 +91,14 @@ export default function AntreanPage() {
     watch,
     reset,
     control,
-    register, // Tetap dibiarkan jika ada field yang pakai register
+    register,
     formState: { errors },
   } = useForm<AntreanFormData>({
     resolver: yupResolver(antreanSchema) as any,
   });
+
+  // Pantau nilai cara_bayar secara real-time untuk memunculkan input BPJS
+  const selectedCaraBayar = watch("cara_bayar");
 
   // =========================================================================
   // 2. REACT QUERY (FETCH DATA)
@@ -110,7 +123,7 @@ export default function AntreanPage() {
   });
 
   const { data: listPasien = [] } = useQuery<Pasien[]>({
-    queryKey: ["pasienListDropdown"],
+    queryKey: उपन्यासListPasien || ["pasienListDropdown"],
     queryFn: async () => {
       try {
         const res = await api.get("/pasien");
@@ -127,7 +140,6 @@ export default function AntreanPage() {
   // =========================================================================
   const todayStr = new Date().toDateString();
 
-  // Menyaring antrean agar hanya menampilkan pendaftaran hari ini saja
   const antreanHariIni = listAntrean.filter((a) => {
     return new Date(a.tgl_registrasi).toDateString() === todayStr;
   });
@@ -140,8 +152,6 @@ export default function AntreanPage() {
     (a) =>
       a.status_antrean === "PEMERIKSAAN" || a.status_antrean === "PROSES_POLI",
   ).length;
-
-  // Diringkas: Langsung cari yang statusnya SELESAI
   const selesaiPoli = antreanHariIni.filter(
     (a) => a.status_antrean === "SELESAI",
   ).length;
@@ -151,7 +161,20 @@ export default function AntreanPage() {
   // =========================================================================
   const mutation = useMutation({
     mutationFn: async (newData: AntreanFormData) => {
-      return await api.post("/antrean", newData);
+      // Jika pasien memilih BPJS, kita bisa gabungkan nomor BPJS ke dalam sub_unit
+      // agar backend tetap aman tanpa perlu mengubah skema database.
+      const payload = {
+        ...newData,
+        sub_unit:
+          newData.cara_bayar === "BPJS" && newData.no_bpjs
+            ? `No. BPJS: ${newData.no_bpjs}`
+            : newData.sub_unit || null,
+      };
+
+      // Hapus properti lokal no_bpjs agar tidak dikirim mentah ke backend yang strict
+      delete payload.no_bpjs;
+
+      return await api.post("/antrean", payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["antreanList"] });
@@ -204,7 +227,7 @@ export default function AntreanPage() {
             Diperiksa
           </Chip>
         );
-      case "SELESAI": // <--- Hanya menyisakan SELESAI
+      case "SELESAI":
         return (
           <Chip
             color="success"
@@ -403,7 +426,6 @@ export default function AntreanPage() {
                             <span className="font-medium text-slate-800">
                               {pasien.nama}
                             </span>
-                            {/* NIK DIHAPUS DARI TAMPILAN AUTOCOMPLETE INI */}
                             <span className="text-tiny text-slate-500">
                               {pasien.id_rm}
                             </span>
@@ -528,6 +550,28 @@ export default function AntreanPage() {
                     </SelectItem>
                   </Select>
                 </div>
+
+                {/* 🔥 INPUT DINAMIS: Otomatis muncul jika Cara Bayar yang dipilih adalah BPJS */}
+                {selectedCaraBayar === "BPJS" && (
+                  <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex flex-col gap-2 animate-fadeIn">
+                    <Input
+                      {...register("no_bpjs")}
+                      isRequired
+                      label="Nomor Kartu BPJS / KIS"
+                      placeholder="Masukkan 13 digit nomor BPJS..."
+                      variant="bordered"
+                      startContent={
+                        <CreditCard size={18} className="text-blue-500" />
+                      }
+                      isInvalid={!!errors.no_bpjs}
+                      errorMessage={errors.no_bpjs?.message}
+                    />
+                    <p className="text-xs text-blue-600">
+                      * Nomor kartu ini akan disimpan secara aman di dalam
+                      catatan sub-unit pelayanan antrean.
+                    </p>
+                  </div>
+                )}
               </ModalBody>
 
               <ModalFooter className="border-t bg-slate-50">
