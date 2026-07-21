@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useSession } from "next-auth/react"; // 🔥 MENGGUNAKAN NEXT-AUTH
+import { useSession } from "next-auth/react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
@@ -50,6 +50,7 @@ interface Pasien {
   tanggal_lahir: string;
   no_telepon: string;
   alamat: string;
+  key?: string; // 🔥 TAMBAHAN: Dibutuhkan oleh NextUI Table
 }
 
 interface RekamMedis {
@@ -89,8 +90,6 @@ export default function ArsipRekamMedisDokterPage() {
 
   const isAuthLoading = status === "loading";
 
-  // Tergantung konfigurasi callbacks NextAuth kamu, username bisa berada di
-  // session.user.username, session.user.name, atau session.user.email
   const currentUsername =
     (session?.user as any)?.username ||
     session?.user?.name ||
@@ -101,7 +100,7 @@ export default function ArsipRekamMedisDokterPage() {
   // =========================================================================
   const { data: listRM = [], isLoading } = useQuery<RekamMedis[]>({
     queryKey: ["rekamMedisDokterDinamis", currentUsername],
-    enabled: !isAuthLoading && !!currentUsername, // Hanya fetch setelah NextAuth siap
+    enabled: !isAuthLoading && !!currentUsername,
     queryFn: async () => {
       try {
         const res = await api.get("/rekam-medis");
@@ -119,7 +118,7 @@ export default function ArsipRekamMedisDokterPage() {
     },
   });
 
-  // 🔥 FILTER DINAMIS: Mencocokkan rekam medis berdasarkan username dari NextAuth
+  // Filter rekam medis berdasarkan username dari NextAuth
   const filteredByDoctor = listRM.filter((rm) => {
     if (!currentUsername) return false;
     return rm.dokter?.username?.toLowerCase() === currentUsername.toLowerCase();
@@ -133,7 +132,11 @@ export default function ArsipRekamMedisDokterPage() {
     }
   });
 
-  const listPasien = Array.from(uniquePatientsMap.values());
+  // 🔥 PERBAIKAN BUG: Menambahkan properti "key" secara manual agar NextUI Table tidak error
+  const listPasien = Array.from(uniquePatientsMap.values()).map((p) => ({
+    ...p,
+    key: p.id_rm,
+  }));
 
   // Filter pencarian untuk tabel daftar pasien
   const filteredPasien = listPasien.filter(
@@ -224,7 +227,8 @@ export default function ArsipRekamMedisDokterPage() {
             }
           >
             {(pasien) => (
-              <TableRow key={pasien.id_rm}>
+              // 🔥 Key di bawah ini akan otomatis dikenali NextUI karena sudah kita sisipkan "key: p.id_rm"
+              <TableRow key={pasien.key}>
                 <TableCell>
                   <Chip
                     size="sm"
