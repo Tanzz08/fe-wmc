@@ -2,17 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import {
-  Card,
-  CardBody,
-  Input,
-  Button,
   Table,
   TableHeader,
   TableColumn,
   TableBody,
   TableRow,
   TableCell,
+  Button,
+  Input,
   Modal,
   ModalContent,
   ModalHeader,
@@ -24,6 +23,8 @@ import {
   Accordion,
   AccordionItem,
   Divider,
+  Card,
+  CardBody,
 } from "@nextui-org/react";
 import {
   Archive,
@@ -73,7 +74,9 @@ interface RekamMedis {
 }
 
 export default function RekamMedisDokterPage() {
+  const router = useRouter();
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRm, setSelectedRm] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -82,7 +85,7 @@ export default function RekamMedisDokterPage() {
   // 2. AMBIL DATA DOKTER YANG SEDANG LOGIN
   // =========================================================================
   useEffect(() => {
-    // Ambil data user dari localStorage (sesuaikan jika kamu menggunakan context/cookies)
+    // Ambil data user dari localStorage
     const userStr = localStorage.getItem("user");
     if (userStr) {
       setCurrentUser(JSON.parse(userStr));
@@ -90,17 +93,17 @@ export default function RekamMedisDokterPage() {
   }, []);
 
   // =========================================================================
-  // 3. FETCH REKAM MEDIS & FILTER KHUSUS DOKTER INI
+  // 3. FETCH DATA REKAM MEDIS & KELOMPOKKAN PER PASIEN
   // =========================================================================
   const { data: allMyRm = [], isLoading } = useQuery<RekamMedis[]>({
     queryKey: ["rekamMedisDokter", currentUser?.username],
-    enabled: !!currentUser?.username, // Hanya menembak API jika user sudah didapatkan
+    enabled: !!currentUser?.username, // Hanya jalankan jika user sudah didapatkan
     queryFn: async () => {
       try {
         const res = await api.get("/rekam-medis");
         const data = Array.isArray(res.data?.data) ? res.data.data : [];
 
-        // 🔥 FILTER PENTING: Hanya ambil RM yang dikerjakan oleh dokter ini
+        // 🔥 FILTER: Hanya ambil rekam medis yang diperiksa oleh dokter ini
         return data.filter(
           (rm: any) => rm.dokter?.username === currentUser.username,
         );
@@ -118,16 +121,17 @@ export default function RekamMedisDokterPage() {
       uniquePatientsMap.set(rm.id_rm, rm.pasien);
     }
   });
+
   const listPasien = Array.from(uniquePatientsMap.values());
 
-  // Filter pencarian tabel
+  // Filter pencarian untuk tabel daftar pasien
   const filteredPasien = listPasien.filter(
     (p) =>
       p.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (p.id_rm && p.id_rm.toLowerCase().includes(searchQuery.toLowerCase())),
   );
 
-  // Data historis spesifik untuk pasien yang diklik di Modal
+  // Filter histori rekam medis spesifik untuk pasien yang diklik di Modal
   const patientRmHistory = allMyRm.filter((rm) => rm.id_rm === selectedRm);
   const detailPasien = listPasien.find((p) => p.id_rm === selectedRm);
 
@@ -146,11 +150,10 @@ export default function RekamMedisDokterPage() {
         <Archive className="text-klinik-blue" size={28} />
         <div>
           <h1 className="text-2xl font-bold text-slate-800">
-            Arsip Rekam Medis Pasien Saya
+            Arsip Rekam Medis Pasien
           </h1>
           <p className="text-sm text-slate-500">
-            Daftar histori rekam medis yang pernah Anda periksa dan diagnosis
-            (Poli {currentUser?.poli_tugas || "-"}).
+            Daftar histori rekam medis pasien yang pernah Anda periksa.
           </p>
         </div>
       </div>
@@ -170,7 +173,7 @@ export default function RekamMedisDokterPage() {
         </CardBody>
       </Card>
 
-      {/* TABEL DAFTAR PASIEN (Hanya pasien milik dokter ini) */}
+      {/* TABEL DAFTAR PASIEN KHUSUS DOKTER LOGIN */}
       <div className="overflow-x-auto w-full">
         <Table
           aria-label="Tabel Arsip Rekam Medis Dokter"
@@ -187,7 +190,7 @@ export default function RekamMedisDokterPage() {
             items={filteredPasien}
             isLoading={isLoading}
             loadingContent={
-              <div className="flex flex-col items-center gap-2">
+              <div className="flex flex-col items-center gap-2 p-4">
                 <Spinner size="md" color="primary" />
                 <span className="font-semibold text-klinik-blue">
                   Memuat Data Pasien Anda...
@@ -213,9 +216,9 @@ export default function RekamMedisDokterPage() {
                 <TableCell className="font-medium text-slate-700 uppercase">
                   {pasien.nama}
                 </TableCell>
-                <TableCell>{pasien.jenis_kelamin}</TableCell>
+                <TableCell>{pasien.jenis_kelamin || "-"}</TableCell>
                 <TableCell className="font-mono text-sm">
-                  {pasien.no_telepon}
+                  {pasien.no_telepon || "-"}
                 </TableCell>
                 <TableCell>
                   <Button
@@ -244,7 +247,7 @@ export default function RekamMedisDokterPage() {
         placement="center"
         size="3xl"
         scrollBehavior="inside"
-        onClose={() => setSelectedRm(null)} // Reset state saat ditutup
+        onClose={() => setSelectedRm(null)}
       >
         <ModalContent>
           {(onClose) => (
@@ -442,7 +445,7 @@ export default function RekamMedisDokterPage() {
               </ModalBody>
 
               <ModalFooter className="bg-white border-t">
-                <Button color="primary" onPress={onClose}>
+                <Button color="primary" variant="flat" onPress={onClose}>
                   Tutup Arsip
                 </Button>
               </ModalFooter>
