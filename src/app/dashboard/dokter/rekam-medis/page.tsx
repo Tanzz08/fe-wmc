@@ -227,8 +227,8 @@ export default function ArsipRekamMedisDokterPage() {
             }
           >
             {(pasien) => (
-              // 🔥 Key di bawah ini akan otomatis dikenali NextUI karena sudah kita sisipkan "key: p.id_rm"
-              <TableRow key={pasien.key}>
+              // 🔥 SOLUSI UTAMA: Berikan key secara langsung dan eksplisit di sini
+              <TableRow key={pasien.id_rm}>
                 <TableCell>
                   <Chip
                     size="sm"
