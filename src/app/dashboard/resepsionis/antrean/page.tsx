@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, SubmitHandler, Controller } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
@@ -36,6 +36,7 @@ import {
   Users,
   Activity,
   CreditCard,
+  IdCard,
 } from "lucide-react";
 import api from "@/lib/axios";
 
@@ -45,6 +46,7 @@ import api from "@/lib/axios";
 interface Pasien {
   id_rm: string;
   nama: string;
+  tanggal_lahir?: string; // 🔥 Ditambahkan untuk menghitung umur
 }
 
 interface Antrean {
@@ -67,7 +69,11 @@ const antreanSchema = yup.object().shape({
   unit_pelayanan: yup.string().required("Pilih unit pelayanan (Poli)"),
   sub_unit: yup.string().optional(),
   cara_bayar: yup.string().required("Pilih cara bayar"),
-  // Validasi dinamis: Wajib diisi jika cara bayar yang dipilih adalah BPJS
+  nik: yup.string().when("cara_bayar", {
+    is: "BPJS",
+    then: (schema) => schema.required("NIK wajib diisi untuk pasien BPJS"),
+    otherwise: (schema) => schema.optional(),
+  }),
   no_bpjs: yup.string().when("cara_bayar", {
     is: "BPJS",
     then: (schema) => schema.required("Nomor BPJS/KIS wajib diisi"),
@@ -77,6 +83,22 @@ const antreanSchema = yup.object().shape({
 
 type AntreanFormData = yup.InferType<typeof antreanSchema> & {
   no_bpjs?: string;
+  nik?: string;
+};
+
+// =========================================================================
+// FUNGSI HELPER: Menghitung Umur Pasien
+// =========================================================================
+const calculateAge = (dobString?: string) => {
+  if (!dobString) return null;
+  const dob = new Date(dobString);
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+    age--;
+  }
+  return age;
 };
 
 export default function AntreanPage() {
@@ -96,8 +118,9 @@ export default function AntreanPage() {
     resolver: yupResolver(antreanSchema) as any,
   });
 
-  // Pantau nilai cara_bayar secara real-time
+  // Pantau interaksi secara real-time
   const selectedCaraBayar = watch("cara_bayar");
+  const selectedIdRm = watch("id_rm");
 
   // =========================================================================
   // 2. REACT QUERY (FETCH DATA)
@@ -135,6 +158,20 @@ export default function AntreanPage() {
   });
 
   // =========================================================================
+  // LOGIKA PEMBATASAN UMUR (HANYA POLI ANAK JIKA <= 3 TAHUN)
+  // =========================================================================
+  const selectedPasien = listPasien.find((p) => p.id_rm === selectedIdRm);
+  const umurPasien = calculateAge(selectedPasien?.tanggal_lahir);
+  const isBalita = umurPasien !== null && umurPasien <= 3;
+
+  // Efek Samping: Memaksa Unit Pelayanan ke "Poli Anak" jika pasien adalah balita
+  useEffect(() => {
+    if (isBalita) {
+      setValue("unit_pelayanan", "Poli Anak", { shouldValidate: true });
+    }
+  }, [isBalita, setValue]);
+
+  // =========================================================================
   // 3. FILTER DATA HARI INI & KALKULASI STATISTIK
   // =========================================================================
   const todayStr = new Date().toDateString();
@@ -160,17 +197,19 @@ export default function AntreanPage() {
   // =========================================================================
   const mutation = useMutation({
     mutationFn: async (newData: AntreanFormData) => {
-      // Jika pasien memilih BPJS, nomor BPJS dititipkan ke sub_unit
-      // agar backend tetap aman tanpa perlu merubah skema database Prisma.
+      let combinedSubUnit = newData.sub_unit || null;
+
+      if (newData.cara_bayar === "BPJS" && (newData.nik || newData.no_bpjs)) {
+        combinedSubUnit = `NIK: ${newData.nik || "-"} | No. BPJS: ${newData.no_bpjs || "-"}`;
+      }
+
       const payload = {
         ...newData,
-        sub_unit:
-          newData.cara_bayar === "BPJS" && newData.no_bpjs
-            ? `No. BPJS: ${newData.no_bpjs}`
-            : newData.sub_unit || null,
+        sub_unit: combinedSubUnit,
       };
 
-      delete payload.no_bpjs; // Hapus properti temporary sebelum dikirim ke server
+      delete payload.no_bpjs;
+      delete payload.nik;
 
       return await api.post("/antrean", payload);
     },
@@ -489,40 +528,61 @@ export default function AntreanPage() {
                     </SelectItem>
                   </Select>
 
-                  <Select
-                    {...register("unit_pelayanan")}
-                    isRequired
-                    label="Unit Pelayanan (Poli Tujuan)"
-                    variant="bordered"
-                    selectedKeys={
-                      watch("unit_pelayanan") ? [watch("unit_pelayanan")] : []
-                    }
-                    onSelectionChange={(keys) =>
-                      setValue(
-                        "unit_pelayanan",
-                        Array.from(keys)[0] as string,
-                        { shouldValidate: true },
-                      )
-                    }
-                    isInvalid={!!errors.unit_pelayanan}
-                    errorMessage={errors.unit_pelayanan?.message}
-                  >
-                    <SelectItem key="Poli Umum" value="Poli Umum">
-                      Poli Umum
-                    </SelectItem>
-                    <SelectItem key="Poli Obgyn" value="Poli Obgyn">
-                      Poli Obgyn
-                    </SelectItem>
-                    <SelectItem key="Poli Gigi" value="Poli Gigi">
-                      Poli Gigi
-                    </SelectItem>
-                    <SelectItem key="Poli Anak" value="Poli Anak">
-                      Poli Anak
-                    </SelectItem>
-                    <SelectItem key="Poli Jiwa" value="Poli Jiwa">
-                      Poli Jiwa
-                    </SelectItem>
-                  </Select>
+                  {/* 🔥 SELECT POLI: Terkunci pada Poli Anak jika balita */}
+                  <div>
+                    <Select
+                      {...register("unit_pelayanan")}
+                      isRequired
+                      label="Unit Pelayanan (Poli Tujuan)"
+                      variant="bordered"
+                      disabledKeys={
+                        isBalita
+                          ? [
+                              "Poli Umum",
+                              "Poli Obgyn",
+                              "Poli Gigi",
+                              "Poli Jiwa",
+                            ]
+                          : []
+                      }
+                      selectedKeys={
+                        watch("unit_pelayanan") ? [watch("unit_pelayanan")] : []
+                      }
+                      onSelectionChange={(keys) =>
+                        setValue(
+                          "unit_pelayanan",
+                          Array.from(keys)[0] as string,
+                          { shouldValidate: true },
+                        )
+                      }
+                      isInvalid={!!errors.unit_pelayanan}
+                      errorMessage={errors.unit_pelayanan?.message}
+                    >
+                      <SelectItem key="Poli Umum" value="Poli Umum">
+                        Poli Umum
+                      </SelectItem>
+                      <SelectItem key="Poli Obgyn" value="Poli Obgyn">
+                        Poli Obgyn
+                      </SelectItem>
+                      <SelectItem key="Poli Gigi" value="Poli Gigi">
+                        Poli Gigi
+                      </SelectItem>
+                      <SelectItem key="Poli Anak" value="Poli Anak">
+                        Poli Anak
+                      </SelectItem>
+                      <SelectItem key="Poli Jiwa" value="Poli Jiwa">
+                        Poli Jiwa
+                      </SelectItem>
+                    </Select>
+
+                    {/* Pesan informasi otomatis jika pasien balita */}
+                    {isBalita && (
+                      <p className="text-xs font-semibold text-blue-600 mt-1">
+                        * Pasien berusia {umurPasien} tahun otomatis diarahkan
+                        ke Poli Anak.
+                      </p>
+                    )}
+                  </div>
 
                   <Select
                     {...register("cara_bayar")}
@@ -549,9 +609,21 @@ export default function AntreanPage() {
                   </Select>
                 </div>
 
-                {/* 🔥 INPUT DINAMIS: Otomatis muncul jika Cara Bayar yang dipilih adalah BPJS */}
+                {/* 🔥 INPUT DINAMIS: Menampilkan NIK & No BPJS */}
                 {selectedCaraBayar === "BPJS" && (
-                  <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex flex-col gap-2">
+                  <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex flex-col gap-4">
+                    <Input
+                      {...register("nik")}
+                      isRequired
+                      label="Nomor Induk Kependudukan (NIK)"
+                      placeholder="Masukkan 16 digit NIK..."
+                      variant="bordered"
+                      startContent={
+                        <IdCard size={18} className="text-blue-500" />
+                      }
+                      isInvalid={!!errors.nik}
+                      errorMessage={errors.nik?.message}
+                    />
                     <Input
                       {...register("no_bpjs")}
                       isRequired
@@ -565,8 +637,8 @@ export default function AntreanPage() {
                       errorMessage={errors.no_bpjs?.message}
                     />
                     <p className="text-xs text-blue-600">
-                      * Nomor kartu ini akan disimpan secara aman di dalam
-                      catatan sistem.
+                      * NIK dan Nomor Kartu akan disimpan secara aman di dalam
+                      catatan sub-unit pendaftaran.
                     </p>
                   </div>
                 )}
