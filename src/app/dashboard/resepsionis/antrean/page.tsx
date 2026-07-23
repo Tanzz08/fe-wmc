@@ -46,7 +46,8 @@ import api from "@/lib/axios";
 interface Pasien {
   id_rm: string;
   nama: string;
-  tanggal_lahir?: string; // 🔥 Ditambahkan untuk menghitung umur
+  tanggal_lahir?: string;
+  nik?: string; // Ditambahkan NIK
 }
 
 interface Antrean {
@@ -118,7 +119,6 @@ export default function AntreanPage() {
     resolver: yupResolver(antreanSchema) as any,
   });
 
-  // Pantau interaksi secara real-time
   const selectedCaraBayar = watch("cara_bayar");
   const selectedIdRm = watch("id_rm");
 
@@ -158,18 +158,25 @@ export default function AntreanPage() {
   });
 
   // =========================================================================
-  // LOGIKA PEMBATASAN UMUR (HANYA POLI ANAK JIKA <= 3 TAHUN)
+  // LOGIKA PEMBATASAN UMUR & AUTO-FILL NIK
   // =========================================================================
   const selectedPasien = listPasien.find((p) => p.id_rm === selectedIdRm);
   const umurPasien = calculateAge(selectedPasien?.tanggal_lahir);
   const isBalita = umurPasien !== null && umurPasien <= 3;
 
-  // Efek Samping: Memaksa Unit Pelayanan ke "Poli Anak" jika pasien adalah balita
+  // 1. Memaksa Unit Pelayanan ke "Poli Anak" jika pasien adalah balita
   useEffect(() => {
     if (isBalita) {
       setValue("unit_pelayanan", "Poli Anak", { shouldValidate: true });
     }
   }, [isBalita, setValue]);
+
+  // 2. Auto-Fill NIK jika memilih BPJS dan data NIK tersedia di Database Pasien
+  useEffect(() => {
+    if (selectedCaraBayar === "BPJS" && selectedPasien?.nik) {
+      setValue("nik", selectedPasien.nik, { shouldValidate: true });
+    }
+  }, [selectedCaraBayar, selectedPasien, setValue]);
 
   // =========================================================================
   // 3. FILTER DATA HARI INI & KALKULASI STATISTIK
@@ -528,7 +535,7 @@ export default function AntreanPage() {
                     </SelectItem>
                   </Select>
 
-                  {/* 🔥 SELECT POLI: Terkunci pada Poli Anak jika balita */}
+                  {/* SELECT POLI */}
                   <div>
                     <Select
                       {...register("unit_pelayanan")}
@@ -575,7 +582,6 @@ export default function AntreanPage() {
                       </SelectItem>
                     </Select>
 
-                    {/* Pesan informasi otomatis jika pasien balita */}
                     {isBalita && (
                       <p className="text-xs font-semibold text-blue-600 mt-1">
                         * Pasien berusia {umurPasien} tahun otomatis diarahkan
@@ -609,7 +615,7 @@ export default function AntreanPage() {
                   </Select>
                 </div>
 
-                {/* 🔥 INPUT DINAMIS: Menampilkan NIK & No BPJS */}
+                {/* INPUT DINAMIS NIK & No BPJS */}
                 {selectedCaraBayar === "BPJS" && (
                   <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex flex-col gap-4">
                     <Input
@@ -637,8 +643,8 @@ export default function AntreanPage() {
                       errorMessage={errors.no_bpjs?.message}
                     />
                     <p className="text-xs text-blue-600">
-                      * NIK dan Nomor Kartu akan disimpan secara aman di dalam
-                      catatan sub-unit pendaftaran.
+                      * NIK terisi otomatis (jika ada). Nomor Kartu akan
+                      disimpan ke dalam riwayat antrean.
                     </p>
                   </div>
                 )}
