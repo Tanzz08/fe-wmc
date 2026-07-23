@@ -241,11 +241,12 @@ export default function PasienPage() {
           <TableHeader>
             <TableColumn>ID RM</TableColumn>
             <TableColumn>NAMA PASIEN</TableColumn>
+            <TableColumn>NIK</TableColumn>
             <TableColumn>JENIS KELAMIN</TableColumn>
             <TableColumn>TANGGAL LAHIR</TableColumn>
             <TableColumn>NO. TELEPON</TableColumn>
             <TableColumn>ALAMAT</TableColumn>
-            <TableColumn>NIK</TableColumn>
+
             <TableColumn align="center">AKSI</TableColumn>
           </TableHeader>
           <TableBody
@@ -388,16 +389,6 @@ export default function PasienPage() {
                   isReadOnly={modalMode === "view"}
                   isInvalid={!!errors.nama}
                   errorMessage={errors.nama?.message}
-                />
-
-                <Input
-                  {...register("nik")}
-                  isRequired
-                  label="NIK"
-                  variant="bordered"
-                  isReadOnly={modalMode === "view"}
-                  isInvalid={!!errors.nik}
-                  errorMessage={errors.nik?.message}
                 />
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
