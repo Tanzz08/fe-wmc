@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm, SubmitHandler } from "react-hook-form";
@@ -59,6 +59,18 @@ const rekamMedisSchema = yup.object().shape({
 
 type RekamMedisFormData = yup.InferType<typeof rekamMedisSchema>;
 
+// FUNGSI HELPER UNTUK MENDAPATKAN WAKTU SAAT INI (Format input datetime-local)
+const getCurrentDateTimeLocal = () => {
+  const now = new Date();
+  // Karena Date.toISOString() mengembalikan format UTC (GMT 0), kita akali
+  // dengan menambahkan timezone offset lokal agar jamnya sesuai zona waktu pengguna (WIB/WITA/WIT).
+  const tzOffset = now.getTimezoneOffset() * 60000;
+  const localISOTime = new Date(now.getTime() - tzOffset)
+    .toISOString()
+    .slice(0, 16); // Ambil hanya YYYY-MM-DDTHH:mm
+  return localISOTime;
+};
+
 // =========================================================================
 // 2. KOMPONEN INTI (FORM REKAM MEDIS)
 // =========================================================================
@@ -81,6 +93,10 @@ function RekamMedisForm() {
     formState: { errors },
   } = useForm<RekamMedisFormData>({
     resolver: yupResolver(rekamMedisSchema) as any,
+    // 🔥 PENGATURAN DEFAULT VALUE UNTUK TANGGAL MASUK: Diambil dari waktu saat ini.
+    defaultValues: {
+      tgl_masuk: getCurrentDateTimeLocal(),
+    },
   });
 
   const { data: listObat = [] } = useQuery({
@@ -124,8 +140,6 @@ function RekamMedisForm() {
     setGlobalError(
       "Gagal menyimpan: Harap periksa kembali form Anda. Ada field wajib yang belum diisi!",
     );
-
-    // Opsional: Jika kamu ingin melihat field apa saja yang error di console
     console.log("Error Validasi:", errors);
   };
 
@@ -147,7 +161,6 @@ function RekamMedisForm() {
   }
 
   // Trik Aman untuk Menangani SelectedKeys pada NextUI
-  // Jika watch mereturn undefined, kita ubah jadi string kosong lalu masukan ke Set
   const getSafeKey = (value: string | undefined) => {
     return value ? new Set([value]) : new Set([]);
   };
@@ -547,7 +560,7 @@ function RekamMedisForm() {
                         variant="bordered"
                         color="success"
                         className="mb-1"
-                        selectedKeys={new Set([])} // Selalu kosong agar bisa diklik berulang kali
+                        selectedKeys={new Set([])}
                         onSelectionChange={(keys) => {
                           const obatTerpilih = Array.from(keys)[0] as string;
                           if (obatTerpilih) {
