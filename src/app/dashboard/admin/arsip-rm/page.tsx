@@ -44,6 +44,7 @@ import api from "@/lib/axios";
 interface Pasien {
   id_rm: string;
   nama: string;
+  nik: string;
   jenis_kelamin: string;
   tanggal_lahir: string;
   no_telepon: string;
@@ -160,6 +161,7 @@ export default function ArsipRekamMedisPage() {
           <TableHeader>
             <TableColumn>ID RM</TableColumn>
             <TableColumn>NAMA PASIEN</TableColumn>
+            <TableColumn>NIK</TableColumn>
             <TableColumn>JENIS KELAMIN</TableColumn>
             <TableColumn>NO. TELEPON</TableColumn>
             <TableColumn align="center">LIHAT BERKAS</TableColumn>
@@ -189,6 +191,7 @@ export default function ArsipRekamMedisPage() {
                 <TableCell className="font-medium text-slate-700 whitespace-nowrap">
                   {pasien.nama}
                 </TableCell>
+                <TableCell>{pasien.nik}</TableCell>
                 <TableCell>{pasien.jenis_kelamin}</TableCell>
                 <TableCell className="font-mono text-sm">
                   {pasien.no_telepon}
