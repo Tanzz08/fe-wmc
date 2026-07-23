@@ -1,14 +1,15 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Button, Spinner } from "@nextui-org/react";
 import { Printer, ArrowLeft } from "lucide-react";
 import api from "@/lib/axios";
 
-export default function CetakRekamMedisPage() {
-  const params = useParams();
-  const nopen = params.nopen as string;
+function CetakDokumen() {
+  const searchParams = useSearchParams();
+  const nopen = searchParams.get("nopen") as string;
 
   const {
     data: rm,
@@ -17,6 +18,7 @@ export default function CetakRekamMedisPage() {
   } = useQuery({
     queryKey: ["rekamMedisDetail", nopen],
     queryFn: async () => {
+      // Pastikan endpoint backend ini sudah ada dan meng-include relasi 'pasien' & 'antrean'
       const response = await api.get(`/rekam-medis/${nopen}`);
       return response.data?.data;
     },
@@ -29,13 +31,25 @@ export default function CetakRekamMedisPage() {
 
   if (isLoading)
     return (
-      <div className="flex justify-center p-10">
-        <Spinner size="lg" />
+      <div className="flex justify-center items-center min-h-screen">
+        <Spinner size="lg" label="Menyiapkan Dokumen Cetak..." />
       </div>
     );
 
   if (error || !rm)
-    return <div className="p-4 text-center">Data tidak ditemukan.</div>;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen text-center p-4">
+        <h2 className="text-xl font-bold text-red-600 mb-2">
+          Gagal Memuat Data
+        </h2>
+        <p className="text-slate-600">
+          Pastikan Rekam Medis untuk pendaftaran {nopen} tersedia.
+        </p>
+        <Button className="mt-4" onPress={() => window.history.back()}>
+          Kembali
+        </Button>
+      </div>
+    );
 
   let lamaDirawat = "-";
   if (rm.tgl_masuk && rm.tgl_keluar) {
@@ -82,8 +96,7 @@ export default function CetakRekamMedisPage() {
         `}
       </style>
 
-      {/* 
-        Tambahan Tailwind print:absolute print:inset-0 print:z-[99999] 
+      {/* Tambahan Tailwind print:absolute print:inset-0 print:z-[99999] 
         Ini akan "mencabut" halaman ini dari layout dashboard saat di-print
       */}
       <div className="min-h-screen bg-slate-200 py-8 font-serif print:bg-white print:py-0 print:absolute print:left-0 print:top-0 print:w-full print:z-[99999] print:block">
@@ -200,7 +213,7 @@ export default function CetakRekamMedisPage() {
 
           {/* TABEL KLINIS (ANAMNESIS & FISIK) */}
           <div className="border-x border-b border-black flex">
-            <div className="w-1/4 border-r border-black p-1">
+            <div className="w-1/4 border-r border-black p-1 font-semibold">
               Ringkasan Riwayat Penyakit :
             </div>
             <div className="w-3/4 p-1 flex flex-col gap-2">
@@ -220,7 +233,7 @@ export default function CetakRekamMedisPage() {
           </div>
 
           <div className="border-x border-b border-black flex">
-            <div className="w-1/4 border-r border-black p-1">
+            <div className="w-1/4 border-r border-black p-1 font-semibold">
               Pemeriksaan Fisis :
             </div>
             <div className="w-3/4 p-1 whitespace-pre-wrap">
@@ -230,7 +243,7 @@ export default function CetakRekamMedisPage() {
           </div>
 
           <div className="border-x border-b border-black flex">
-            <div className="w-1/4 border-r border-black p-1">
+            <div className="w-1/4 border-r border-black p-1 font-semibold">
               Pemeriksaan Penunjang / Diagnostik Terpenting :
             </div>
             <div className="w-3/4 p-1 flex flex-col gap-1">
@@ -294,19 +307,24 @@ export default function CetakRekamMedisPage() {
           </table>
 
           <div className="border-x border-b border-black flex p-1">
-            <div className="w-1/4">Alergi (Reaksi Obat) :</div>
+            <div className="w-1/4 font-semibold">Alergi (Reaksi Obat) :</div>
             <div className="w-3/4 font-bold">{rm.alergi || "Tidak Ada"}</div>
           </div>
 
           {/* STATUS KELUAR */}
           <div className="border-x border-b border-black flex">
             <div className="w-1/2 border-r border-black p-1">
-              <span className="block mb-1">Kondisi Waktu Keluar RS :</span>
+              <span className="block mb-1 font-semibold">
+                Kondisi Waktu Keluar RS :
+              </span>
               <div className="flex gap-4">
                 <span>{rm.kondisi_keluar === "Sembuh" ? "☑" : "☐"} SEMBUH</span>
                 <span>
-                  {rm.kondisi_keluar === "Belum Sembuh" ? "☑" : "☐"} BELUM
-                  SEMBUH
+                  {rm.kondisi_keluar === "Belum Sembuh" ||
+                  rm.kondisi_keluar === "Belum Sembuh / Stabil"
+                    ? "☑"
+                    : "☐"}{" "}
+                  BELUM SEMBUH
                 </span>
                 <span>
                   {rm.kondisi_keluar === "Membaik" ? "☑" : "☐"} MEMBAIK
@@ -340,17 +358,26 @@ export default function CetakRekamMedisPage() {
               </div>
             </div>
             <div className="w-1/2 p-1">
-              <span className="block mb-1">Cara Keluar :</span>
+              <span className="block mb-1 font-semibold">Cara Keluar :</span>
               <div className="flex flex-col">
                 <span>
-                  {rm.cara_keluar === "Diijinkan Pulang" ? "☑" : "☐"} DIIJINKAN
-                  PULANG
+                  {rm.cara_keluar === "Diijinkan Pulang" ||
+                  rm.cara_keluar === "Diijinkan Pulang / Rawat Jalan"
+                    ? "☑"
+                    : "☐"}{" "}
+                  DIIJINKAN PULANG
                 </span>
                 <span>
                   {rm.cara_keluar === "Pulang Paksa" ? "☑" : "☐"} PULANG ATAS
                   PERMINTAAN SENDIRI
                 </span>
-                <span>{rm.cara_keluar === "Rujuk" ? "☑" : "☐"} DIRUJUK KE</span>
+                <span>
+                  {rm.cara_keluar === "Dirujuk" ||
+                  rm.cara_keluar === "Rujuk ke RS / Spesialis"
+                    ? "☑"
+                    : "☐"}{" "}
+                  DIRUJUK KE RS LAIN
+                </span>
               </div>
             </div>
           </div>
@@ -363,16 +390,38 @@ export default function CetakRekamMedisPage() {
             </div>
             <div className="text-center w-1/3 flex flex-col justify-end">
               <p className="font-bold uppercase">
-                MAKASSAR, {formatDate(new Date().toISOString())}
+                MAKASSAR,{" "}
+                {new Date().toLocaleDateString("id-ID", {
+                  day: "2-digit",
+                  month: "long",
+                  year: "numeric",
+                })}
               </p>
               <p className="mb-16">Dokter Penanggung Jawab Pelayanan</p>
               <p className="font-bold underline uppercase">
-                dr. {rm.dokter?.username}
+                dr. {rm.dokter?.username || "Pemeriksa"}
               </p>
             </div>
           </div>
         </div>
       </div>
     </>
+  );
+}
+
+// =========================================================================
+// PEMBUNGKUS SUSPENSE
+// =========================================================================
+export default function CetakRekamMedisPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex flex-col items-center justify-center">
+          <Spinner size="lg" color="primary" />
+        </div>
+      }
+    >
+      <CetakDokumen />
+    </Suspense>
   );
 }

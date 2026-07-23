@@ -374,7 +374,7 @@ export default function ArsipRekamMedisPage() {
                                 startContent={<Printer size={16} />}
                                 onPress={() =>
                                   window.open(
-                                    `/dashboard/admin/arsip-rm/cetak?id_rm=${detailPasien.id_rm}&nopen=${rm.nopen}`,
+                                    `/dashboard/dokter/rekam-medis/cetak?id_rm=${detailPasien.id_rm}&nopen=${rm.nopen}`,
                                     "_blank",
                                   )
                                 }
