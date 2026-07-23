@@ -15,6 +15,7 @@ import {
   PackageSearch,
   UserCog,
   Archive,
+  Stethoscope,
 } from "lucide-react";
 
 // KITA GUNAKAN NEXT-AUTH, BUKAN LAGI COOKIES/JWT-DECODE MANUAL
@@ -91,6 +92,11 @@ export default function DashboardLayout({
       name: "Master Pasien",
       path: "/dashboard/admin/pasien",
       icon: <Users size={20} />,
+    },
+    {
+      name: "Master Perawat",
+      path: "/dashboard/admin/perawat",
+      icon: <Stethoscope size={20} />,
     },
     {
       name: "Master Obat",
