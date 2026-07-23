@@ -41,6 +41,7 @@ interface Pasien {
   tanggal_lahir: string;
   no_telepon: string;
   alamat: string;
+  nik: string;
 }
 
 type ModalMode = "create" | "edit" | "view";
@@ -49,6 +50,7 @@ const pasienSchema = yup.object().shape({
   id_rm: yup.string().optional(),
   nama: yup.string().required("Nama lengkap wajib diisi"),
   jenis_kelamin: yup.string().required("Pilih jenis kelamin"),
+  nik: yup.string().required("NIK wajib diisi"),
   tanggal_lahir: yup.string().required("Tanggal lahir wajib diisi"),
   no_telepon: yup.string().required("Nomor telepon wajib diisi"),
   alamat: yup.string().required("Alamat wajib diisi"),
@@ -108,6 +110,7 @@ export default function PasienPage() {
     reset({
       id_rm: "",
       nama: "",
+      nik: "",
       jenis_kelamin: "",
       tanggal_lahir: "",
       no_telepon: "",
@@ -135,6 +138,7 @@ export default function PasienPage() {
         tanggal_lahir: formattedDate,
         no_telepon: dataPasien.no_telepon,
         alamat: dataPasien.alamat,
+        nik: dataPasien.nik,
       });
     } catch (err) {
       setErrorMsg("Gagal mengambil detail pasien dari server.");
@@ -241,6 +245,7 @@ export default function PasienPage() {
             <TableColumn>TANGGAL LAHIR</TableColumn>
             <TableColumn>NO. TELEPON</TableColumn>
             <TableColumn>ALAMAT</TableColumn>
+            <TableColumn>NIK</TableColumn>
             <TableColumn align="center">AKSI</TableColumn>
           </TableHeader>
           <TableBody
@@ -268,6 +273,7 @@ export default function PasienPage() {
                 <TableCell className="font-medium text-slate-700 whitespace-nowrap">
                   {pasien.nama}
                 </TableCell>
+                <TableCell>{pasien.nik}</TableCell>
                 <TableCell>{pasien.jenis_kelamin}</TableCell>
                 <TableCell className="whitespace-nowrap">
                   {new Date(pasien.tanggal_lahir).toLocaleDateString("id-ID", {
@@ -382,6 +388,16 @@ export default function PasienPage() {
                   isReadOnly={modalMode === "view"}
                   isInvalid={!!errors.nama}
                   errorMessage={errors.nama?.message}
+                />
+
+                <Input
+                  {...register("nik")}
+                  isRequired
+                  label="NIK"
+                  variant="bordered"
+                  isReadOnly={modalMode === "view"}
+                  isInvalid={!!errors.nik}
+                  errorMessage={errors.nik?.message}
                 />
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
