@@ -112,6 +112,13 @@ export default function DetailPasienPage() {
               <p className="text-lg font-bold text-slate-800">{p.nama}</p>
             </div>
 
+            <div>
+              <p className="text-xs text-slate-400 font-semibold uppercase">
+                NIK
+              </p>
+              <p className="text-lg font-bold text-slate-800">{p.nik}</p>
+            </div>
+
             <div className="flex gap-8">
               <div>
                 <p className="text-xs text-slate-400 font-semibold uppercase mb-1">
