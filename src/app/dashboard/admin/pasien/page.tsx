@@ -391,6 +391,16 @@ export default function PasienPage() {
                   errorMessage={errors.nama?.message}
                 />
 
+                <Input
+                  {...register("nik")}
+                  isRequired
+                  label="NIK"
+                  variant="bordered"
+                  isReadOnly={modalMode === "view"}
+                  isInvalid={!!errors.nik}
+                  errorMessage={errors.nik?.message}
+                />
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {modalMode === "view" ? (
                     <Input
